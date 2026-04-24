@@ -8,7 +8,7 @@ function formatPhone(p) {
   return "+" + p;
 }
 
-// STEP 1: SEND OTP
+// SEND OTP
 window.startPhoneAuth = async function () {
   const phoneInput = document.getElementById("reg-phone").value;
   const phone = formatPhone(phoneInput);
@@ -22,7 +22,7 @@ window.startPhoneAuth = async function () {
   }
 };
 
-// STEP 2: VERIFY OTP + LOGIN / REGISTER
+// VERIFY OTP + LOGIN / REGISTER
 window.completeAuth = async function () {
   const code = document.getElementById("otp-code").value;
   const phoneInput = document.getElementById("reg-phone").value;
@@ -30,18 +30,20 @@ window.completeAuth = async function () {
 
   try {
     const user = await verifyOTP(code);
+const idToken = await user.getIdToken();
 
-    // 🔥 SEND TO BACKEND
+    //  SEND TO BACKEND
     const res = await fetch(API + "/auth/phone-login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        phone: phoneInput,
-        name: name
-      })
-    });
+     method: "POST",
+     headers: {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer " + idToken
+  },
+  body: JSON.stringify({
+    phone: phoneInput,
+    name: name
+  })
+});
 
     const data = await res.json();
 
