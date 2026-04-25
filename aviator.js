@@ -1,7 +1,7 @@
 const API = "https://aviator-9raf.onrender.com/api";
 const SOCKET_URL = "https://aviator-9raf.onrender.com";
 
-let socket;
+let socket = null;
 let token = localStorage.getItem("av_token");
 
 let currentMult = 1;
@@ -12,10 +12,11 @@ const el = (id) => document.getElementById(id);
 
 // ========== INIT ==========
 document.addEventListener("DOMContentLoaded", () => {
-  connectSocket();
   handleResponsive();
 
+  // ✅ ONLY connect if user already logged in
   if (token) {
+    connectSocket();
     fetchWallet();
     showLoggedInUI();
   }
@@ -23,11 +24,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // ========== SOCKET ==========
 function connectSocket() {
+  // 🔥 prevent duplicate sockets
+  if (socket) {
+    socket.disconnect();
+  }
+
   socket = io(SOCKET_URL, {
     auth: { token }
   });
 
-  socket.on("connect", () => fetchWallet());
+  socket.on("connect", () => {
+    console.log("✅ Socket connected");
+    fetchWallet();
+  });
 
   socket.on("round_start", () => {
     currentMult = 1;
@@ -131,10 +140,18 @@ function disableCashout() {
 
 // ========== WALLET ==========
 async function fetchWallet() {
+  if (!token) return;
+
   try {
     const r = await fetch(API + "/wallet/me", {
       headers: { Authorization: "Bearer " + token }
     });
+
+    if (r.status === 401) {
+      console.warn("Unauthorized — logging out");
+      logout();
+      return;
+    }
 
     const d = await r.json();
 
@@ -149,7 +166,7 @@ async function fetchWallet() {
   }
 }
 
-// ========== AUTH HELPERS ==========
+// ========== PHONE FORMAT ==========
 function formatPhone(input) {
   let phone = input.replace(/\D/g, "");
 
@@ -158,7 +175,7 @@ function formatPhone(input) {
   }
 
   if (!phone.startsWith("254")) {
-    throw new Error("Use format 07XXXXXXXX");
+    throw new Error("Use 07XXXXXXXX format");
   }
 
   return "+" + phone;
@@ -184,7 +201,6 @@ function startPhoneLogin() {
 
 function verifyPhoneLogin() {
   const code = el("login-code")?.value;
-
   if (!code) return toast("Enter OTP");
 
   verifyOTP(code)
@@ -195,7 +211,7 @@ function verifyPhoneLogin() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": "Bearer " + idToken
+          Authorization: "Bearer " + idToken
         }
       });
 
@@ -205,10 +221,11 @@ function verifyPhoneLogin() {
       token = data.token;
       localStorage.setItem("av_token", token);
 
-      closeModal("login-modal");
+      connectSocket(); // 🔥 FIX
       showLoggedInUI();
       fetchWallet();
 
+      closeModal("login-modal");
       toast("Login successful");
     })
     .catch(err => {
@@ -249,7 +266,7 @@ function completeAuth() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": "Bearer " + idToken
+          Authorization: "Bearer " + idToken
         },
         body: JSON.stringify({ name })
       });
@@ -260,10 +277,11 @@ function completeAuth() {
       token = data.token;
       localStorage.setItem("av_token", token);
 
-      closeModal("register-modal");
+      connectSocket(); // 🔥 FIX
       showLoggedInUI();
       fetchWallet();
 
+      closeModal("register-modal");
       toast("Account created");
     })
     .catch(err => {
@@ -278,7 +296,7 @@ function logout() {
   location.reload();
 }
 
-// ========== UI STATE ==========
+// ========== UI ==========
 function showLoggedInUI() {
   el("btn-logout").style.display = "block";
   el("top-balance").style.display = "block";
@@ -310,7 +328,7 @@ function toast(m) {
   setTimeout(() => (t.className = ""), 2500);
 }
 
-// expose
+// ========== EXPORT ==========
 window.startGame = startGame;
 window.cashOut = cashOut;
 
