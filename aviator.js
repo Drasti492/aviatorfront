@@ -7,7 +7,7 @@ let token = localStorage.getItem("av_token");
 let currentMult = 1;
 let hasBet = false;
 
-// ========== SAFE ==========
+// ========== SAFE DOM ==========
 const el = (id) => document.getElementById(id);
 
 // ========== INIT ==========
@@ -78,7 +78,7 @@ function cashOut() {
   socket.emit("cashout");
 }
 
-// ========== UI SAFE ==========
+// ========== UI ==========
 function updateMultiplier(v) {
   if (el("mult-el")) el("mult-el").innerText = v.toFixed(2) + "x";
 }
@@ -86,6 +86,7 @@ function updateMultiplier(v) {
 function showCrash(p) {
   const o = el("crash-overlay");
   if (!o) return;
+
   o.style.display = "flex";
   if (el("crash-cs")) el("crash-cs").innerText = "at " + p + "x";
 }
@@ -97,11 +98,12 @@ function hideCrash() {
 function animatePlane(m) {
   const p = el("plane-el");
   if (!p) return;
+
   p.style.left = Math.min(700, m * 60) + "px";
   p.style.bottom = Math.min(200, m * 40) + "px";
 }
 
-// ========== BUTTON SAFE ==========
+// ========== BUTTON STATES ==========
 const safe = (id, state) => el(id)?.setAttribute("disabled", state);
 
 function enableBet() {
@@ -138,12 +140,113 @@ async function fetchWallet() {
 
     if (el("top-bal-val"))
       el("top-bal-val").innerText = "KES " + (d.walletBalance || 0);
-  } catch {}
+
+  } catch (err) {
+    console.log("wallet error", err);
+  }
 }
 
-// ========== AUTH ==========
-function startPhoneLogin() {}
-function startPhoneAuth() {}
+// ========== LOGIN ==========
+function startPhoneLogin() {
+  const phone = el("login-phone")?.value;
+
+  if (!phone) return toast("Enter phone number");
+  if (typeof sendOTP !== "function") return toast("Firebase not loaded");
+
+  sendOTP(phone)
+    .then(() => {
+      el("login-otp").style.display = "block";
+      toast("OTP sent");
+    })
+    .catch(() => toast("OTP failed"));
+}
+
+function verifyPhoneLogin() {
+  const code = el("login-code")?.value;
+
+  if (!code) return toast("Enter OTP");
+
+  verifyOTP(code)
+    .then(async (user) => {
+      const idToken = await user.getIdToken();
+
+      const res = await fetch(API + "/auth/phone-login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + idToken
+        }
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.message);
+
+      token = data.token;
+      localStorage.setItem("av_token", token);
+
+      closeModal("login-modal");
+      fetchWallet();
+      toast("Login successful");
+
+    })
+    .catch(err => {
+      console.log(err);
+      toast("Login failed");
+    });
+}
+
+// ========== REGISTER ==========
+function startPhoneAuth() {
+  const phone = el("reg-phone")?.value;
+
+  if (!phone) return toast("Enter phone");
+
+  if (typeof sendOTP !== "function") return toast("Firebase not loaded");
+
+  sendOTP(phone)
+    .then(() => {
+      el("otp-section").style.display = "block";
+      toast("OTP sent");
+    })
+    .catch(() => toast("OTP failed"));
+}
+
+function completeAuth() {
+  const code = el("otp-code")?.value;
+  const name = el("reg-name")?.value;
+
+  if (!code) return toast("Enter OTP");
+
+  verifyOTP(code)
+    .then(async (user) => {
+      const idToken = await user.getIdToken();
+
+      const res = await fetch(API + "/auth/phone-login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + idToken
+        },
+        body: JSON.stringify({ name })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.message);
+
+      token = data.token;
+      localStorage.setItem("av_token", token);
+
+      closeModal("register-modal");
+      fetchWallet();
+      toast("Account created");
+    })
+    .catch(err => {
+      console.log(err);
+      toast("Signup failed");
+    });
+}
 
 // ========== MODALS ==========
 function openModal(id) {
@@ -164,15 +267,22 @@ function handleResponsive() {
 function toast(m) {
   const t = el("toast");
   if (!t) return;
+
   t.innerText = m;
   t.className = "show";
+
   setTimeout(() => (t.className = ""), 2500);
 }
 
 // expose
 window.startGame = startGame;
 window.cashOut = cashOut;
+
 window.openModal = openModal;
 window.closeModal = closeModal;
+
 window.startPhoneLogin = startPhoneLogin;
+window.verifyPhoneLogin = verifyPhoneLogin;
+
 window.startPhoneAuth = startPhoneAuth;
+window.completeAuth = completeAuth;

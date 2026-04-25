@@ -1,6 +1,5 @@
 const API = "https://aviator-9raf.onrender.com/api";
 
-// ========== FORMAT PHONE ==========
 function formatPhone(p) {
   p = p.replace(/\D/g, "");
   if (p.startsWith("0")) p = "254" + p.slice(1);
@@ -8,15 +7,61 @@ function formatPhone(p) {
   return "+" + p;
 }
 
-// ========== REGISTER ==========
+// ================= LOGIN =================
+window.startPhoneLogin = async function () {
+  const phoneInput = document.getElementById("login-phone").value;
+  const phone = formatPhone(phoneInput);
+
+  try {
+    await sendOTP(phone);
+    document.getElementById("login-otp").style.display = "block";
+    alert("OTP sent");
+  } catch (err) {
+    console.error(err);
+    alert("OTP failed (check Firebase config)");
+  }
+};
+
+window.verifyPhoneLogin = async function () {
+  const code = document.getElementById("login-code").value;
+
+  try {
+    const user = await verifyOTP(code);
+    const idToken = await user.getIdToken();
+
+    const res = await fetch(API + "/auth/phone-login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + idToken
+      }
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.message);
+
+    localStorage.setItem("av_token", data.token);
+
+    alert("Login success");
+    location.reload();
+  } catch (err) {
+    console.error(err);
+    alert("Login failed");
+  }
+};
+
+// ================= REGISTER =================
 window.startPhoneAuth = async function () {
-  const phone = formatPhone(document.getElementById("reg-phone").value);
+  const phoneInput = document.getElementById("reg-phone").value;
+  const phone = formatPhone(phoneInput);
 
   try {
     await sendOTP(phone);
     document.getElementById("otp-section").style.display = "block";
+    alert("OTP sent");
   } catch (err) {
-    console.log(err);
+    console.error(err);
     alert("OTP failed");
   }
 };
@@ -39,50 +84,15 @@ window.completeAuth = async function () {
     });
 
     const data = await res.json();
+
     if (!res.ok) throw new Error(data.message);
 
     localStorage.setItem("av_token", data.token);
+
+    alert("Account created");
     location.reload();
   } catch (err) {
-    console.log(err);
+    console.error(err);
     alert("Signup failed");
-  }
-};
-
-// ========== LOGIN ==========
-window.startPhoneLogin = async function () {
-  const phone = formatPhone(document.getElementById("login-phone").value);
-
-  try {
-    await sendOTP(phone);
-    document.getElementById("login-otp").style.display = "block";
-  } catch (err) {
-    alert("OTP failed");
-  }
-};
-
-window.verifyPhoneLogin = async function () {
-  const code = document.getElementById("login-code").value;
-
-  try {
-    const user = await verifyOTP(code);
-    const idToken = await user.getIdToken();
-
-    const res = await fetch(API + "/auth/phone-login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + idToken
-      }
-    });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message);
-
-    localStorage.setItem("av_token", data.token);
-    location.reload();
-  } catch (err) {
-    console.log(err);
-    alert("Login failed");
   }
 };

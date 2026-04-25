@@ -107,6 +107,7 @@
 <!-- ================= MODALS ================= -->
 
 <!-- LOGIN -->
+<!-- LOGIN -->
 <div class="modal-bg" id="login-modal">
   <div class="modal">
 
@@ -114,16 +115,22 @@
 
     <div class="modal-title">Welcome back</div>
 
-    <div class="field">
-      <label>Phone Number</label>
-      <input type="tel" id="login-phone">
+    <!-- PHONE -->
+    <div id="login-step-1">
+
+      <div class="field">
+        <label>Phone Number</label>
+        <input type="tel" id="login-phone" placeholder="+2547xxxxxxx">
+      </div>
+
+      <button class="btn-full blue" onclick="startPhoneLogin()">
+        Send OTP
+      </button>
+
     </div>
 
-    <button class="btn-full blue" onclick="startPhoneLogin()">
-      Send OTP
-    </button>
-
-    <!-- OTP INSIDE MODAL -->
+    <!-- OTP -->
+    <div id="login-otp" style="display:none; margin-top:15px;">
 
       <div class="field">
         <label>Enter OTP</label>
@@ -230,6 +237,9 @@
   <button id="m-btn-bet" onclick="startGame()">Bet</button>
   <button id="m-btn-cash" disabled onclick="cashOut()">Cash</button>
 </div>
+
+
+<div id="recaptcha-container"></div>
 
 <!-- TOAST -->
 <div id="toast"></div>
