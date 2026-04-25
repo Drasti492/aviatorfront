@@ -96,9 +96,12 @@ function startGame() {
   if (!token) return openModal("login-modal");
 
   const amount = parseFloat(getBetInput());
-  const auto = parseFloat(getAutoInput());
+  const autoCashout = parseFloat(getAutoInput());
 
-  socket.emit("place_bet", { amount, autoCashout: auto });
+  socket.emit("place_bet", {
+    amount,
+    autoCashout
+  });
 }
 
 function cashOut() {
@@ -106,37 +109,41 @@ function cashOut() {
   socket.emit("cashout");
 }
 
-// ========== INPUT HELPERS ==========
+// ========== INPUT ==========
 function getBetInput() {
-  return window.innerWidth < 900
-    ? document.getElementById("m-bet").value
-    : document.getElementById("bet-input").value;
+  const el = document.getElementById("bet-input");
+  return el ? el.value : 0;
 }
 
 function getAutoInput() {
-  return window.innerWidth < 900
-    ? document.getElementById("m-auto").value
-    : document.getElementById("auto-input").value;
+  const el = document.getElementById("auto-input");
+  return el ? el.value : 2;
 }
 
-// ========== UI ==========
+// ========== UI SAFE FIX ==========
 function updateMultiplier(val) {
-  document.getElementById("mult-el").innerText = val.toFixed(2) + "x";
+  const el = document.getElementById("mult-el");
+  if (el) el.innerText = val.toFixed(2) + "x";
 }
 
 function showCrash(point) {
   const el = document.getElementById("crash-overlay");
+  if (!el) return;
+
   el.style.display = "flex";
 
-  document.getElementById("crash-cs").innerText = "at " + point + "x";
+  const cs = document.getElementById("crash-cs");
+  if (cs) cs.innerText = "at " + point + "x";
 }
 
 function hideCrash() {
-  document.getElementById("crash-overlay").style.display = "none";
+  const el = document.getElementById("crash-overlay");
+  if (el) el.style.display = "none";
 }
 
 function animatePlane(mult) {
   const plane = document.getElementById("plane-el");
+  if (!plane) return;
 
   const x = Math.min(700, mult * 60);
   const y = Math.min(200, mult * 40);
@@ -145,30 +152,43 @@ function animatePlane(mult) {
   plane.style.bottom = y + "px";
 }
 
-// ========== BUTTON STATES ==========
+// ========== BUTTON SAFETY ==========
 function enableBet() {
-  document.getElementById("btn-bet").disabled = false;
-  document.getElementById("m-btn-bet").disabled = false;
+  const a = document.getElementById("btn-bet");
+  const b = document.getElementById("m-btn-bet");
+
+  if (a) a.disabled = false;
+  if (b) b.disabled = false;
 }
 
 function disableBet() {
-  document.getElementById("btn-bet").disabled = true;
-  document.getElementById("m-btn-bet").disabled = true;
+  const a = document.getElementById("btn-bet");
+  const b = document.getElementById("m-btn-bet");
+
+  if (a) a.disabled = true;
+  if (b) b.disabled = true;
 }
 
 function enableCashout() {
-  document.getElementById("btn-cash").disabled = false;
-  document.getElementById("m-btn-cash").disabled = false;
+  const a = document.getElementById("btn-cash");
+  const b = document.getElementById("m-btn-cash");
+
+  if (a) a.disabled = false;
+  if (b) b.disabled = false;
 }
 
 function disableCashout() {
-  document.getElementById("btn-cash").disabled = true;
-  document.getElementById("m-btn-cash").disabled = true;
+  const a = document.getElementById("btn-cash");
+  const b = document.getElementById("m-btn-cash");
+
+  if (a) a.disabled = true;
+  if (b) b.disabled = true;
 }
 
 // ========== FEED ==========
 function addFeed(text, type = "") {
   const feed = document.getElementById("feed-list");
+  if (!feed) return;
 
   const div = document.createElement("div");
   div.className = "fi " + type;
@@ -182,6 +202,7 @@ function addFeed(text, type = "") {
 }
 
 function maskPhone(phone) {
+  if (!phone) return "****";
   return phone.slice(0, 4) + "****";
 }
 
@@ -200,15 +221,18 @@ async function fetchWallet() {
 }
 
 function updateWalletDisplay(balance) {
-  document.getElementById("wallet-bal").innerText = "KES " + balance;
-  document.getElementById("top-bal-val").innerText = "KES " + balance;
+  const w = document.getElementById("wallet-bal");
+  const t = document.getElementById("top-bal-val");
+
+  if (w) w.innerText = "KES " + balance;
+  if (t) t.innerText = "KES " + balance;
 }
 
 // ========== AUTH ==========
 async function startPhoneLogin() {
   const phone = document.getElementById("login-phone").value;
 
-  const res = await fetch(API + "/auth/login", {
+  const res = await fetch(API + "/auth/phone-login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ phone })
@@ -216,7 +240,9 @@ async function startPhoneLogin() {
 
   const data = await res.json();
 
-  if (!data.token) return toast("Login failed", "error");
+  if (!res.ok || !data.token) {
+    return toast("Login failed", "error");
+  }
 
   token = data.token;
   localStorage.setItem("av_token", token);
@@ -228,19 +254,22 @@ async function startPhoneLogin() {
   toast("Logged in", "success");
 }
 
+// REGISTER (same endpoint fixed)
 async function startPhoneAuth() {
   const name = document.getElementById("reg-name").value;
   const phone = document.getElementById("reg-phone").value;
 
-  const res = await fetch(API + "/auth/register", {
+  const res = await fetch(API + "/auth/phone-login", {
     method: "POST",
-    headers: {"Content-Type":"application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, phone })
   });
 
   const data = await res.json();
 
-  if (!data.token) return toast("Signup failed", "error");
+  if (!res.ok || !data.token) {
+    return toast("Signup failed", "error");
+  }
 
   token = data.token;
   localStorage.setItem("av_token", token);
@@ -252,53 +281,55 @@ async function startPhoneAuth() {
   toast("Account created", "success");
 }
 
-function logout() {
-  localStorage.removeItem("av_token");
-  location.reload();
-}
-
-// ========== UI CONTROL ==========
+// ========== UI ==========
 function unlockUI() {
-  document.getElementById("btn-login-top").style.display = "none";
-  document.getElementById("btn-logout").style.display = "block";
-  document.getElementById("top-balance").style.display = "flex";
+  const loginBtn = document.getElementById("btn-login-top");
+  const logoutBtn = document.getElementById("btn-logout");
 
-  document.getElementById("btn-deposit").disabled = false;
-  document.getElementById("btn-withdraw").disabled = false;
+  if (loginBtn) loginBtn.style.display = "none";
+  if (logoutBtn) logoutBtn.style.display = "block";
 
-  document.getElementById("wallet-sub").innerText = "Ready to play";
+  const bal = document.getElementById("top-balance");
+  if (bal) bal.style.display = "flex";
 }
 
-// ========== MODALS ==========
 function openModal(id) {
-  document.getElementById(id).classList.add("open");
+  const el = document.getElementById(id);
+  if (el) el.classList.add("open");
 }
 
 function closeModal(id) {
-  document.getElementById(id).classList.remove("open");
+  const el = document.getElementById(id);
+  if (el) el.classList.remove("open");
 }
 
-// ========== RESPONSIVE ==========
 function handleResponsive() {
   const mobile = window.innerWidth < 900;
-  document.getElementById("mobile-controls").style.display = mobile ? "block" : "none";
+  const el = document.getElementById("mobile-controls");
+  if (el) el.style.display = mobile ? "block" : "none";
 }
+
 window.addEventListener("resize", handleResponsive);
 
 // ========== TOAST ==========
-function toast(msg, type="") {
+function toast(msg, type = "") {
   const el = document.getElementById("toast");
+  if (!el) return;
+
   el.innerText = msg;
   el.className = "show " + type;
 
-  setTimeout(() => el.className = "", 3000);
+  setTimeout(() => (el.className = ""), 3000);
 }
 
-// ========== GLOBAL ==========
-window.openModal = openModal;
-window.closeModal = closeModal;
+// expose
 window.startGame = startGame;
 window.cashOut = cashOut;
 window.startPhoneLogin = startPhoneLogin;
 window.startPhoneAuth = startPhoneAuth;
-window.logout = logout;
+window.logout = () => {
+  localStorage.removeItem("av_token");
+  location.reload();
+};
+window.openModal = openModal;
+window.closeModal = closeModal;
