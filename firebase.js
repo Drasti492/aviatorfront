@@ -9,35 +9,36 @@ const firebaseConfig = {
   apiKey: "AIzaSyBb-NBiJNfMjuLUn6IsoAEWiiox0x45xEY",
   authDomain: "aviator-78db3.firebaseapp.com",
   projectId: "aviator-78db3",
-  storageBucket: "aviator-78db3.firebasestorage.app",
-  messagingSenderId: "974672784155",
-  appId: "1:974672784155:web:93ef6e668e0fd069e341be"
 };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
-let confirmationResult = null;
+let confirmationResult;
 
-// INIT RECAPTCHA (ONLY ONCE)
-function initRecaptcha() {
-  if (window.recaptchaVerifier) return;
+// ✅ ALWAYS ENSURE RECAPTCHA EXISTS
+async function ensureRecaptcha() {
+  if (!window.recaptchaVerifier) {
+    window.recaptchaVerifier = new RecaptchaVerifier(
+      auth,
+      "recaptcha-container",
+      {
+        size: "normal", // change to "invisible" later
+      }
+    );
 
-  window.recaptchaVerifier = new RecaptchaVerifier(
-    "recaptcha-container",
-    {
-      size: "invisible"
-    },
-    auth
-  );
-
-  window.recaptchaVerifier.render();
+    await window.recaptchaVerifier.render();
+  }
 }
 
-// SEND OTP
-async function sendOTP(phone) {
+// ✅ SEND OTP
+window.sendOTP = async (phone) => {
   try {
-    initRecaptcha();
+    if (!phone.startsWith("+")) {
+      throw new Error("Use format: +2547XXXXXXXX");
+    }
+
+    await ensureRecaptcha(); // 🔥 FIX
 
     confirmationResult = await signInWithPhoneNumber(
       auth,
@@ -46,20 +47,27 @@ async function sendOTP(phone) {
     );
 
     return true;
+
   } catch (err) {
     console.error("OTP ERROR:", err);
+
+    // 🔥 reset recaptcha if it breaks
+    if (window.recaptchaVerifier) {
+      window.recaptchaVerifier.clear();
+      window.recaptchaVerifier = null;
+    }
+
+    alert(err.message);
     throw err;
   }
-}
+};
 
-// VERIFY OTP
-async function verifyOTP(code) {
-  if (!confirmationResult) throw new Error("No OTP session found");
+// ✅ VERIFY OTP
+window.verifyOTP = async (code) => {
+  if (!confirmationResult) {
+    throw new Error("No OTP session. Click send OTP again.");
+  }
 
   const result = await confirmationResult.confirm(code);
   return result.user;
-}
-
-// EXPOSE TO GLOBAL
-window.sendOTP = sendOTP;
-window.verifyOTP = verifyOTP;
+};

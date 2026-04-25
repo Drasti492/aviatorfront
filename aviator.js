@@ -15,7 +15,10 @@ document.addEventListener("DOMContentLoaded", () => {
   connectSocket();
   handleResponsive();
 
-  if (token) fetchWallet();
+  if (token) {
+    fetchWallet();
+    showLoggedInUI();
+  }
 });
 
 // ========== SOCKET ==========
@@ -146,19 +149,37 @@ async function fetchWallet() {
   }
 }
 
+// ========== AUTH HELPERS ==========
+function formatPhone(input) {
+  let phone = input.replace(/\D/g, "");
+
+  if (phone.startsWith("0")) {
+    phone = "254" + phone.slice(1);
+  }
+
+  if (!phone.startsWith("254")) {
+    throw new Error("Use format 07XXXXXXXX");
+  }
+
+  return "+" + phone;
+}
+
 // ========== LOGIN ==========
 function startPhoneLogin() {
-  const phone = el("login-phone")?.value;
+  try {
+    const raw = el("login-phone")?.value;
+    const phone = formatPhone(raw);
 
-  if (!phone) return toast("Enter phone number");
-  if (typeof sendOTP !== "function") return toast("Firebase not loaded");
+    sendOTP(phone)
+      .then(() => {
+        el("login-otp").style.display = "block";
+        toast("OTP sent");
+      })
+      .catch((e) => toast(e.message));
 
-  sendOTP(phone)
-    .then(() => {
-      el("login-otp").style.display = "block";
-      toast("OTP sent");
-    })
-    .catch(() => toast("OTP failed"));
+  } catch (e) {
+    toast(e.message);
+  }
 }
 
 function verifyPhoneLogin() {
@@ -179,16 +200,16 @@ function verifyPhoneLogin() {
       });
 
       const data = await res.json();
-
       if (!res.ok) throw new Error(data.message);
 
       token = data.token;
       localStorage.setItem("av_token", token);
 
       closeModal("login-modal");
+      showLoggedInUI();
       fetchWallet();
-      toast("Login successful");
 
+      toast("Login successful");
     })
     .catch(err => {
       console.log(err);
@@ -198,18 +219,20 @@ function verifyPhoneLogin() {
 
 // ========== REGISTER ==========
 function startPhoneAuth() {
-  const phone = el("reg-phone")?.value;
+  try {
+    const raw = el("reg-phone")?.value;
+    const phone = formatPhone(raw);
 
-  if (!phone) return toast("Enter phone");
+    sendOTP(phone)
+      .then(() => {
+        el("otp-section").style.display = "block";
+        toast("OTP sent");
+      })
+      .catch((e) => toast(e.message));
 
-  if (typeof sendOTP !== "function") return toast("Firebase not loaded");
-
-  sendOTP(phone)
-    .then(() => {
-      el("otp-section").style.display = "block";
-      toast("OTP sent");
-    })
-    .catch(() => toast("OTP failed"));
+  } catch (e) {
+    toast(e.message);
+  }
 }
 
 function completeAuth() {
@@ -232,20 +255,33 @@ function completeAuth() {
       });
 
       const data = await res.json();
-
       if (!res.ok) throw new Error(data.message);
 
       token = data.token;
       localStorage.setItem("av_token", token);
 
       closeModal("register-modal");
+      showLoggedInUI();
       fetchWallet();
+
       toast("Account created");
     })
     .catch(err => {
       console.log(err);
       toast("Signup failed");
     });
+}
+
+// ========== LOGOUT ==========
+function logout() {
+  localStorage.removeItem("av_token");
+  location.reload();
+}
+
+// ========== UI STATE ==========
+function showLoggedInUI() {
+  el("btn-logout").style.display = "block";
+  el("top-balance").style.display = "block";
 }
 
 // ========== MODALS ==========
@@ -286,3 +322,5 @@ window.verifyPhoneLogin = verifyPhoneLogin;
 
 window.startPhoneAuth = startPhoneAuth;
 window.completeAuth = completeAuth;
+
+window.logout = logout;
