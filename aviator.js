@@ -7,6 +7,9 @@ let token = localStorage.getItem("av_token");
 let currentMult = 1;
 let hasBet = false;
 
+let tempPhone = "";
+let regPhoneTemp = "";
+
 const el = (id) => document.getElementById(id);
 
 // ========== INIT ==========
@@ -74,9 +77,7 @@ function connectSocket() {
 function formatPhone(input) {
   let phone = input.replace(/\D/g, "");
 
-  if (phone.startsWith("0")) {
-    phone = "254" + phone.slice(1);
-  }
+  if (phone.startsWith("0")) phone = "254" + phone.slice(1);
 
   if (!phone.startsWith("254")) {
     throw new Error("Use format 07XXXXXXXX");
@@ -85,122 +86,151 @@ function formatPhone(input) {
   return "+" + phone;
 }
 
-// ========== LOGIN ==========
-function startPhoneLogin() {
-  console.log("🔥 Login button clicked");
+// ========== OTP REQUEST ==========
+async function sendOtpRequest(phone) {
+  const res = await fetch(API + "/auth/send-otp", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ phone })
+  });
 
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message);
+
+  return true;
+}
+
+async function verifyOtpRequest(phone, code, name="") {
+  const res = await fetch(API + "/auth/verify-otp", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ phone, code, name })
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message);
+
+  return data;
+}
+
+// ========== LOGIN ==========
+async function startPhoneLogin() {
   try {
     const raw = el("login-phone")?.value;
     const phone = formatPhone(raw);
 
-    if (typeof sendOTP !== "function") {
-      return toast("Firebase not loaded");
-    }
+    await fetch(API + "/auth/send-otp", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ phone })
+    });
 
-    sendOTP(phone)
-      .then(() => {
-        el("login-otp").style.display = "block";
-        toast("OTP sent");
-      })
-      .catch(err => {
-        console.error(err);
-        toast(err.message);
-      });
+    el("login-otp").style.display = "block";
+    toast("OTP sent");
 
-  } catch (e) {
-    toast(e.message);
+  } catch (err) {
+    console.error(err);
+    toast("Failed to send OTP");
   }
 }
 
-function verifyPhoneLogin() {
+
+
+async function verifyPhoneLogin() {
   const code = el("login-code")?.value;
+  const raw = el("login-phone")?.value;
+
   if (!code) return toast("Enter OTP");
 
-  verifyOTP(code)
-    .then(async (user) => {
-      const idToken = await user.getIdToken();
+  const phone = formatPhone(raw);
 
-      const res = await fetch(API + "/auth/phone-login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + idToken
-        }
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-
-      token = data.token;
-      localStorage.setItem("av_token", token);
-
-      connectSocket();
-      showLoggedInUI();
-      fetchWallet();
-
-      closeModal("login-modal");
-      toast("Login successful");
-    })
-    .catch(err => {
-      console.error(err);
-      toast("Login failed");
+  try {
+    const res = await fetch(API + "/auth/verify-otp", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ phone, code })
     });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message);
+
+    token = data.token;
+    localStorage.setItem("av_token", token);
+
+    connectSocket();
+    showLoggedInUI();
+    fetchWallet();
+
+    closeModal("login-modal");
+    toast("Login successful");
+
+  } catch (err) {
+    console.error(err);
+    toast("Invalid OTP");
+  }
 }
 
 // ========== REGISTER ==========
-function startPhoneAuth() {
+async function startPhoneAuth() {
   try {
     const raw = el("reg-phone")?.value;
     const phone = formatPhone(raw);
 
-    sendOTP(phone)
-      .then(() => {
-        el("otp-section").style.display = "block";
-        toast("OTP sent");
-      })
-      .catch(err => toast(err.message));
+    await fetch(API + "/auth/send-otp", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ phone })
+    });
 
-  } catch (e) {
-    toast(e.message);
+    el("otp-section").style.display = "block";
+    toast("OTP sent");
+
+  } catch (err) {
+    toast("Failed to send OTP");
   }
 }
 
-function completeAuth() {
+async function completeAuth() {
   const code = el("otp-code")?.value;
   const name = el("reg-name")?.value;
+  const raw = el("reg-phone")?.value;
 
   if (!code) return toast("Enter OTP");
 
-  verifyOTP(code)
-    .then(async (user) => {
-      const idToken = await user.getIdToken();
+  const phone = formatPhone(raw);
 
-      const res = await fetch(API + "/auth/phone-login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + idToken
-        },
-        body: JSON.stringify({ name })
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-
-      token = data.token;
-      localStorage.setItem("av_token", token);
-
-      connectSocket();
-      showLoggedInUI();
-      fetchWallet();
-
-      closeModal("register-modal");
-      toast("Account created");
-    })
-    .catch(err => {
-      console.error(err);
-      toast("Signup failed");
+  try {
+    const res = await fetch(API + "/auth/verify-otp", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ phone, code, name })
     });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message);
+
+    token = data.token;
+    localStorage.setItem("av_token", token);
+
+    connectSocket();
+    showLoggedInUI();
+    fetchWallet();
+
+    closeModal("register-modal");
+    toast("Account created");
+
+  } catch (err) {
+    console.error(err);
+    toast("Signup failed");
+  }
 }
 
 // ========== WALLET ==========
@@ -222,8 +252,64 @@ async function fetchWallet() {
     el("wallet-bal").innerText = "KES " + (d.walletBalance || 0);
     el("top-bal-val").innerText = "KES " + (d.walletBalance || 0);
 
-  } catch (err) {
-    console.log(err);
+  } catch {}
+}
+
+// ========== PAYMENTS ==========
+function openDepositModal() {
+  openModal("deposit-modal");
+}
+
+function openWithdrawModal() {
+  openModal("withdraw-modal");
+}
+
+async function doDeposit() {
+  const phone = formatPhone(el("dep-phone").value);
+  const amount = Number(el("dep-amount").value);
+
+  try {
+    const res = await fetch(API + "/payment/stk-push", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token
+      },
+      body: JSON.stringify({ phone, amount })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.message);
+
+    toast("STK sent. Check phone");
+
+  } catch (e) {
+    toast(e.message);
+  }
+}
+
+async function confirmWithdraw() {
+  const amount = Number(el("wth-amount").value);
+
+  try {
+    const res = await fetch(API + "/wallet/withdraw", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token
+      },
+      body: JSON.stringify({ amount })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message);
+
+    toast("Withdraw successful");
+    fetchWallet();
+
+  } catch (e) {
+    toast(e.message);
   }
 }
 
@@ -263,21 +349,10 @@ function animatePlane(m) {
 }
 
 // ========== HELPERS ==========
-function enableBet() {
-  el("btn-bet").disabled = false;
-}
-
-function disableBet() {
-  el("btn-bet").disabled = true;
-}
-
-function enableCashout() {
-  el("btn-cash").disabled = false;
-}
-
-function disableCashout() {
-  el("btn-cash").disabled = true;
-}
+function enableBet() { el("btn-bet").disabled = false; }
+function disableBet() { el("btn-bet").disabled = true; }
+function enableCashout() { el("btn-cash").disabled = false; }
+function disableCashout() { el("btn-cash").disabled = true; }
 
 function showLoggedInUI() {
   el("btn-logout").style.display = "block";
@@ -289,13 +364,8 @@ function logout() {
   location.reload();
 }
 
-function openModal(id) {
-  el(id).classList.add("open");
-}
-
-function closeModal(id) {
-  el(id).classList.remove("open");
-}
+function openModal(id) { el(id).classList.add("open"); }
+function closeModal(id) { el(id).classList.remove("open"); }
 
 function handleResponsive() {
   const m = el("mobile-controls");
@@ -309,7 +379,7 @@ function toast(m) {
   setTimeout(() => (t.className = ""), 2500);
 }
 
-// EXPORT
+// ========== EXPORT ==========
 window.startGame = startGame;
 window.cashOut = cashOut;
 window.startPhoneLogin = startPhoneLogin;
@@ -319,3 +389,7 @@ window.completeAuth = completeAuth;
 window.openModal = openModal;
 window.closeModal = closeModal;
 window.logout = logout;
+window.openDepositModal = openDepositModal;
+window.openWithdrawModal = openWithdrawModal;
+window.doDeposit = doDeposit;
+window.confirmWithdraw = confirmWithdraw;
