@@ -1,4 +1,4 @@
-const API = "https://wallback.onrender.com/api";
+const API = "https://aviator-9raf.onrender.com/api";
 
 // FORMAT PHONE
 function formatPhone(p) {

@@ -1,6 +1,6 @@
 // ========== CONFIG ==========
-const API = "https://wallback.onrender.com/api";
-const SOCKET_URL = "https://wallback.onrender.com";
+const API = "https://aviator-9raf.onrender.com/api";
+const SOCKET_URL = "https://aviator-9raf.onrender.com";
 
 let socket;
 let token = localStorage.getItem("av_token");
