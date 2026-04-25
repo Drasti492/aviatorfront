@@ -155,3 +155,25 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
   .wallet-btns{gap:6px}
   .modal{padding:22px 16px}
 }
+
+.quick-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.quick-amounts button {
+  flex: 1;
+  padding: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.quick-amounts button:hover {
+  border-color: var(--accent);
+}

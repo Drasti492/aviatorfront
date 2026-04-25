@@ -189,20 +189,41 @@
 
     <button class="modal-close" onclick="closeModal('deposit-modal')">×</button>
 
-    <div class="modal-title">Deposit</div>
+    <div class="modal-title">Deposit Funds</div>
 
-    <div class="field">
-      <input type="tel" id="dep-phone" placeholder="Phone">
+    <!-- FIXED AMOUNTS -->
+    <div class="quick-amounts">
+      <button onclick="setDeposit(100)">100</button>
+      <button onclick="setDeposit(200)">200</button>
+      <button onclick="setDeposit(300)">300</button>
+      <button onclick="setDeposit(1000)">1000</button>
+      <button onclick="setDeposit(5000)">5000</button>
     </div>
 
     <div class="field">
-      <input type="number" id="dep-amount" placeholder="Amount">
+      <label>Enter Amount (KES 100 - 100,000)</label>
+      <input type="number" id="dep-amount" min="100" max="100000">
+    </div>
+
+    <div class="field">
+      <input type="tel" id="dep-phone" placeholder="+2547xxxxxxx">
     </div>
 
     <button class="btn-full green" onclick="doDeposit()">
-      Send STK
+      Pay with M-Pesa
     </button>
 
+  </div>
+</div>
+
+
+<div class="modal-bg" id="stk-modal">
+  <div class="modal">
+    <div class="spinner"></div>
+    <div class="modal-title">Processing Payment</div>
+    <div class="stk-msg">
+      Check your phone and enter M-Pesa PIN
+    </div>
   </div>
 </div>
 

@@ -67,6 +67,10 @@ function connectSocket() {
     fetchWallet();
   });
 
+  socket.on("bet_feed", (data) => {
+  addFeed(data);
+});
+
   socket.on("error_msg", (m) => toast(m));
 }
 
@@ -198,6 +202,27 @@ async function completeAuth() {
   }
 }
 
+
+function addFeed(d) {
+  const feed = el("feed-list");
+
+  const div = document.createElement("div");
+  div.className = "feed-item";
+
+  div.innerHTML = `
+    <span>👤 ${d.name}</span>
+    <span>BET KES ${d.bet}</span>
+    <span>${d.cashout}x</span>
+    <span>+KES ${d.win}</span>
+  `;
+
+  feed.prepend(div);
+
+  if (feed.children.length > 6) {
+    feed.removeChild(feed.lastChild);
+  }
+}
+
 // ================= WALLET =================
 async function fetchWallet() {
   if (!token) return;
@@ -233,6 +258,8 @@ function openWithdrawModal() {
 
 async function doDeposit() {
   try {
+    openModal("stk-modal");
+
     const phone = formatPhone(el("dep-phone").value);
     const amount = Number(el("dep-amount").value);
 
@@ -250,10 +277,16 @@ async function doDeposit() {
 
     toast("STK sent");
 
+    setTimeout(() => {
+      closeModal("stk-modal");
+    }, 5000);
+
   } catch (err) {
+    closeModal("stk-modal");
     toast(err.message);
   }
 }
+
 
 async function confirmWithdraw() {
   try {
@@ -310,8 +343,11 @@ function hideCrash() {
 
 function animatePlane(m) {
   const p = el("plane-el");
-  p.style.left = Math.min(700, m * 60) + "px";
-  p.style.bottom = Math.min(200, m * 40) + "px";
+
+  const x = Math.log(m + 1) * 120;
+  const y = Math.pow(m, 1.2) * 20;
+
+  p.style.transform = `translate(${x}px, -${y}px) rotate(${m * 2}deg)`;
 }
 
 // ================= HELPERS =================
@@ -345,6 +381,12 @@ function toast(m) {
   setTimeout(() => (t.className = ""), 2500);
 }
 
+function setDeposit(amount) {
+  el("dep-amount").value = amount;
+}
+
+window.setDeposit = setDeposit;
+
 // ================= EXPORT =================
 window.startGame = startGame;
 window.cashOut = cashOut;
@@ -359,3 +401,4 @@ window.openDepositModal = openDepositModal;
 window.openWithdrawModal = openWithdrawModal;
 window.doDeposit = doDeposit;
 window.confirmWithdraw = confirmWithdraw;
+
