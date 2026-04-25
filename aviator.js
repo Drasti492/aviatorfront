@@ -256,12 +256,19 @@ function openWithdrawModal() {
   openModal("withdraw-modal");
 }
 
+
 async function doDeposit() {
   try {
-    openModal("stk-modal");
+    el("deposit-loading").style.display = "block";
 
     const phone = formatPhone(el("dep-phone").value);
-    const amount = Number(el("dep-amount").value);
+    let amount = Number(el("dep-amount").value);
+
+    amount = Math.round(amount); // no decimals
+
+    if (amount < 100 || amount > 100000) {
+      throw new Error("Invalid amount");
+    }
 
     const res = await fetch(API + "/payment/stk-push", {
       method: "POST",
@@ -273,17 +280,15 @@ async function doDeposit() {
     });
 
     const data = await res.json();
+
     if (!res.ok) throw new Error(data.message);
 
-    toast("STK sent");
-
-    setTimeout(() => {
-      closeModal("stk-modal");
-    }, 5000);
+    toast("Check your phone");
 
   } catch (err) {
-    closeModal("stk-modal");
     toast(err.message);
+  } finally {
+    el("deposit-loading").style.display = "none";
   }
 }
 
@@ -344,10 +349,13 @@ function hideCrash() {
 function animatePlane(m) {
   const p = el("plane-el");
 
-  const x = Math.log(m + 1) * 120;
-  const y = Math.pow(m, 1.2) * 20;
+  const progress = Math.min(m / 10, 1); // normalize
 
-  p.style.transform = `translate(${x}px, -${y}px) rotate(${m * 2}deg)`;
+  const x = 10 + (progress * 80); // 10% → 90%
+  const y = 20 + (progress * 150); // safe height
+
+  p.style.left = x + "%";
+  p.style.bottom = y + "px";
 }
 
 // ================= HELPERS =================
@@ -402,3 +410,6 @@ window.openWithdrawModal = openWithdrawModal;
 window.doDeposit = doDeposit;
 window.confirmWithdraw = confirmWithdraw;
 
+function setAmount(v) {
+  el("dep-amount").value = v;
+}

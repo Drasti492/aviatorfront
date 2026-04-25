@@ -177,3 +177,11 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .quick-amounts button:hover {
   border-color: var(--accent);
 }
+
+#plane-el {
+  position: absolute;
+  bottom: 20px;
+  left: 10%;
+  transition: bottom .08s linear, left .08s linear;
+  will-change: transform;
+}
