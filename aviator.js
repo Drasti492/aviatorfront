@@ -12,6 +12,7 @@ let hasBet = false;
 // ========== INIT ==========
 document.addEventListener("DOMContentLoaded", async () => {
   connectSocket();
+  handleResponsive();
 
   if (token) {
     await fetchWallet();
@@ -26,11 +27,10 @@ function connectSocket() {
   });
 
   socket.on("connect", () => {
-    console.log(" Connected to game server");
+    console.log("✅ Connected to game server");
     fetchWallet();
   });
 
-  //  ROUND START
   socket.on("round_start", () => {
     flying = true;
     currentMult = 1;
@@ -43,7 +43,6 @@ function connectSocket() {
     disableCashout();
   });
 
-  //  REAL-TIME MULTIPLIER
   socket.on("game_tick", (data) => {
     currentMult = data.multiplier;
     flying = true;
@@ -52,7 +51,6 @@ function connectSocket() {
     animatePlane(currentMult);
   });
 
-  //  CRASH (SERVER AUTHORITY)
   socket.on("round_crash", (data) => {
     flying = false;
 
@@ -62,7 +60,6 @@ function connectSocket() {
     enableBet();
   });
 
-  //  BET CONFIRMED
   socket.on("bet_placed", (data) => {
     hasBet = true;
 
@@ -74,7 +71,6 @@ function connectSocket() {
     addFeed("You placed bet", "you");
   });
 
-  // CASHOUT SUCCESS
   socket.on("cashout_success", (data) => {
     hasBet = false;
 
@@ -86,12 +82,8 @@ function connectSocket() {
     fetchWallet();
   });
 
-  //  LIVE BET FEED 
   socket.on("live_bet", (data) => {
-    addFeed(
-      `${maskPhone(data.phone)} bet KES ${data.amount}`,
-      "neutral"
-    );
+    addFeed(`${maskPhone(data.phone)} bet KES ${data.amount}`);
   });
 
   socket.on("error_msg", (msg) => {
@@ -99,43 +91,50 @@ function connectSocket() {
   });
 }
 
-//cashout and place bet functions
+// ========== GAME ==========
 function startGame() {
   if (!token) return openModal("login-modal");
 
   const amount = parseFloat(getBetInput());
   const auto = parseFloat(getAutoInput());
 
-  socket.emit("place_bet", {
-    amount,
-    autoCashout: auto
-  });
+  socket.emit("place_bet", { amount, autoCashout: auto });
 }
 
 function cashOut() {
   if (!hasBet) return;
-
   socket.emit("cashout");
 }
 
-
-// ========== UI HELPERS ==========
-function enableBet() {
-  document.getElementById("btn-bet").disabled = false;
+// ========== INPUT HELPERS ==========
+function getBetInput() {
+  return window.innerWidth < 900
+    ? document.getElementById("m-bet").value
+    : document.getElementById("bet-input").value;
 }
 
-function disableBet() {
-  document.getElementById("btn-bet").disabled = true;
+function getAutoInput() {
+  return window.innerWidth < 900
+    ? document.getElementById("m-auto").value
+    : document.getElementById("auto-input").value;
 }
 
-function enableCashout() {
-  document.getElementById("btn-cash").disabled = false;
+// ========== UI ==========
+function updateMultiplier(val) {
+  document.getElementById("mult-el").innerText = val.toFixed(2) + "x";
 }
 
-function disableCashout() {
-  document.getElementById("btn-cash").disabled = true;
+function showCrash(point) {
+  const el = document.getElementById("crash-overlay");
+  el.style.display = "flex";
+
+  document.getElementById("crash-cs").innerText = "at " + point + "x";
 }
-//animate plane
+
+function hideCrash() {
+  document.getElementById("crash-overlay").style.display = "none";
+}
+
 function animatePlane(mult) {
   const plane = document.getElementById("plane-el");
 
@@ -146,7 +145,28 @@ function animatePlane(mult) {
   plane.style.bottom = y + "px";
 }
 
-//show crash
+// ========== BUTTON STATES ==========
+function enableBet() {
+  document.getElementById("btn-bet").disabled = false;
+  document.getElementById("m-btn-bet").disabled = false;
+}
+
+function disableBet() {
+  document.getElementById("btn-bet").disabled = true;
+  document.getElementById("m-btn-bet").disabled = true;
+}
+
+function enableCashout() {
+  document.getElementById("btn-cash").disabled = false;
+  document.getElementById("m-btn-cash").disabled = false;
+}
+
+function disableCashout() {
+  document.getElementById("btn-cash").disabled = true;
+  document.getElementById("m-btn-cash").disabled = true;
+}
+
+// ========== FEED ==========
 function addFeed(text, type = "") {
   const feed = document.getElementById("feed-list");
 
@@ -165,18 +185,120 @@ function maskPhone(phone) {
   return phone.slice(0, 4) + "****";
 }
 
-//fetch wallet balance
+// ========== WALLET ==========
 async function fetchWallet() {
   try {
     const r = await fetch(API + "/wallet/me", {
-      headers: {
-        Authorization: "Bearer " + token
-      }
+      headers: { Authorization: "Bearer " + token }
     });
 
     const data = await r.json();
-    updateWalletDisplay(data.walletBalance);
+    updateWalletDisplay(data.walletBalance || 0);
   } catch (e) {
     console.log(e);
   }
 }
+
+function updateWalletDisplay(balance) {
+  document.getElementById("wallet-bal").innerText = "KES " + balance;
+  document.getElementById("top-bal-val").innerText = "KES " + balance;
+}
+
+// ========== AUTH ==========
+async function startPhoneLogin() {
+  const phone = document.getElementById("login-phone").value;
+
+  const res = await fetch(API + "/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phone })
+  });
+
+  const data = await res.json();
+
+  if (!data.token) return toast("Login failed", "error");
+
+  token = data.token;
+  localStorage.setItem("av_token", token);
+
+  closeModal("login-modal");
+  unlockUI();
+  fetchWallet();
+
+  toast("Logged in", "success");
+}
+
+async function startPhoneAuth() {
+  const name = document.getElementById("reg-name").value;
+  const phone = document.getElementById("reg-phone").value;
+
+  const res = await fetch(API + "/auth/register", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ name, phone })
+  });
+
+  const data = await res.json();
+
+  if (!data.token) return toast("Signup failed", "error");
+
+  token = data.token;
+  localStorage.setItem("av_token", token);
+
+  closeModal("register-modal");
+  unlockUI();
+  fetchWallet();
+
+  toast("Account created", "success");
+}
+
+function logout() {
+  localStorage.removeItem("av_token");
+  location.reload();
+}
+
+// ========== UI CONTROL ==========
+function unlockUI() {
+  document.getElementById("btn-login-top").style.display = "none";
+  document.getElementById("btn-logout").style.display = "block";
+  document.getElementById("top-balance").style.display = "flex";
+
+  document.getElementById("btn-deposit").disabled = false;
+  document.getElementById("btn-withdraw").disabled = false;
+
+  document.getElementById("wallet-sub").innerText = "Ready to play";
+}
+
+// ========== MODALS ==========
+function openModal(id) {
+  document.getElementById(id).classList.add("open");
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove("open");
+}
+
+// ========== RESPONSIVE ==========
+function handleResponsive() {
+  const mobile = window.innerWidth < 900;
+  document.getElementById("mobile-controls").style.display = mobile ? "block" : "none";
+}
+window.addEventListener("resize", handleResponsive);
+
+// ========== TOAST ==========
+function toast(msg, type="") {
+  const el = document.getElementById("toast");
+  el.innerText = msg;
+  el.className = "show " + type;
+
+  setTimeout(() => el.className = "", 3000);
+}
+
+// ========== GLOBAL ==========
+window.openModal = openModal;
+window.closeModal = closeModal;
+window.startGame = startGame;
+window.cashOut = cashOut;
+window.startPhoneLogin = startPhoneLogin;
+window.startPhoneAuth = startPhoneAuth;
+window.logout = logout;

@@ -4,39 +4,51 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Aviator — Fly & Win</title>
+
 <link rel="stylesheet" href="./aviator.css">
+
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 </head>
+
 <body>
 <div id="app">
 
   <!-- TOP BAR -->
   <div class="topbar">
     <div class="logo">AVIA<span>TOR</span></div>
-    <div class="topbar-right" id="topbar-right">
+
+    <div class="topbar-right">
       <div class="balance-chip" id="top-balance" style="display:none">
         <span class="lbl">Balance</span>
         <span id="top-bal-val">$0.00</span>
       </div>
+
       <button class="btn-icon" id="btn-logout" style="display:none" onclick="logout()">Logout</button>
-      <button class="btn-auth" id="btn-login-top" onclick="openModal('login-modal')">Sign In</button>
+
+      <button class="btn-auth" onclick="openModal('login-modal')">
+        Sign In
+      </button>
     </div>
   </div>
 
   <!-- MAIN -->
   <div class="main">
-    <!-- LEFT: game -->
+
+    <!-- LEFT -->
     <div style="display:flex;flex-direction:column;gap:12px">
 
       <!-- SKY -->
       <div id="sky">
         <div class="star-layer" id="stars-el"></div>
-        <canvas id="trail-cvs" width="800" height="260"></canvas>
+        <canvas id="trail-cvs"></canvas>
+
         <div id="plane-el">✈️</div>
+
         <div id="mult-display">
           <div class="mult-num" id="mult-el">1.00x</div>
           <div class="mult-phase" id="phase-el">Place a bet to start</div>
         </div>
+
         <div id="crash-overlay">
           <div class="ct" id="crash-ct">CRASHED</div>
           <div class="cs" id="crash-cs">at 2.50x</div>
@@ -49,220 +61,178 @@
         <div id="feed-list"></div>
       </div>
 
-      <!-- MOBILE BET CONTROLS -->
-      <div class="card" id="mobile-controls" style="display:none">
-        <div class="card-title">Place Bet</div>
-        <div class="field"><label>Bet (KES)</label><input type="number" id="m-bet" value="100" min="10" step="10"></div>
-        <div class="field"><label>Auto cashout (×)</label><input type="number" id="m-auto" value="2.00" min="1.01" step="0.01"></div>
-        <div class="btn-row">
-          <button class="btn-bet" id="m-btn-bet" onclick="startGame()">Bet</button>
-          <button class="btn-cash" id="m-btn-cash" disabled onclick="cashOut()">Cash Out</button>
-        </div>
-      </div>
     </div>
 
     <!-- SIDEBAR -->
     <div class="sidebar">
+
       <!-- WALLET -->
       <div class="card">
         <div class="card-title">My Wallet</div>
+
         <div class="wallet-bal" id="wallet-bal">$0.00</div>
-        <div class="wallet-sub" id="wallet-sub">Sign in to play</div>
+        <div class="wallet-sub">Sign in to play</div>
+
         <div class="wallet-btns">
-          <button class="w-btn dep" id="btn-deposit" onclick="openDepositModal()" disabled>
-            ↓ Deposit
-          </button>
-          <button class="w-btn wth" id="btn-withdraw" onclick="openWithdrawModal()" disabled>
-            ↑ Withdraw
-          </button>
+          <button class="w-btn dep" onclick="openDepositModal()" disabled>Deposit</button>
+          <button class="w-btn wth" onclick="openWithdrawModal()" disabled>Withdraw</button>
         </div>
       </div>
 
-      <!-- BET CONTROLS (desktop) -->
+      <!-- BET -->
       <div class="card">
         <div class="card-title">Bet Controls</div>
-        <div class="field"><label>Bet amount (KES)</label><input type="number" id="bet-input" value="100" min="10" step="10"></div>
-        <div class="field"><label>Auto cashout (×)</label><input type="number" id="auto-input" value="2.00" min="1.01" step="0.01"></div>
+
+        <div class="field">
+          <label>Bet amount</label>
+          <input type="number" id="bet-input" value="100">
+        </div>
+
+        <div class="field">
+          <label>Auto cashout</label>
+          <input type="number" id="auto-input" value="2.00">
+        </div>
+
         <div class="btn-row">
-          <button class="btn-bet" id="btn-bet" onclick="startGame()">Place Bet</button>
+          <button class="btn-bet" onclick="startGame()">Place Bet</button>
           <button class="btn-cash" id="btn-cash" disabled onclick="cashOut()">Cash Out</button>
         </div>
       </div>
 
-      <!-- STATS -->
-      <div class="card">
-        <div class="card-title">Session Stats</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px">
-            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Rounds</div>
-            <div style="font-family:var(--font-mono);font-size:18px" id="stat-rounds">0</div>
-          </div>
-          <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px">
-            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Wins</div>
-            <div style="font-family:var(--font-mono);font-size:18px;color:var(--green)" id="stat-wins">0</div>
-          </div>
-          <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px">
-            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">P&L (KES)</div>
-            <div style="font-family:var(--font-mono);font-size:18px" id="stat-pnl">0</div>
-          </div>
-          <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px">
-            <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Best mult</div>
-            <div style="font-family:var(--font-mono);font-size:18px;color:var(--accent)" id="stat-best">—</div>
-          </div>
-        </div>
-      </div>
     </div>
+
   </div>
 </div>
 
-<!-- ======== MODALS ======== -->
+<!-- ================= MODALS ================= -->
 
 <!-- LOGIN -->
- <div class="modal-bg" id="login-modal">
+<div class="modal-bg" id="login-modal">
   <div class="modal">
-     <div class="modal-title">Welcome back</div>
-     <div class="field">
-     <label>Phone Number</label>
-     <input type="tel" id="login-phone" placeholder="0712345678">
-  </div>
-  </div>
- </div> 
 
-<button class="btn-full blue" onclick="startPhoneLogin()">
-  Send OTP
-</button>
+    <button class="modal-close" onclick="closeModal('login-modal')">×</button>
 
-<div id="login-otp" style="display:none">
-  <div class="field">
-    <label>Enter OTP</label>
-    <input type="text" id="login-code">
+    <div class="modal-title">Welcome back</div>
+
+    <div class="field">
+      <label>Phone Number</label>
+      <input type="tel" id="login-phone">
+    </div>
+
+    <button class="btn-full blue" onclick="startPhoneLogin()">
+      Send OTP
+    </button>
+
+    <!-- OTP INSIDE MODAL -->
+    <div id="login-otp" style="display:none">
+
+      <div class="field">
+        <label>Enter OTP</label>
+        <input type="text" id="login-code">
+      </div>
+
+      <button class="btn-full green" onclick="verifyPhoneLogin()">
+        Verify & Login
+      </button>
+
+    </div>
+
   </div>
-
-  <button class="btn-full green" onclick="verifyPhoneLogin()">
-    Verify & Login
-  </button>
 </div>
 
 <!-- REGISTER -->
 <div class="modal-bg" id="register-modal">
   <div class="modal">
+
     <button class="modal-close" onclick="closeModal('register-modal')">×</button>
 
     <div class="modal-title">Create account</div>
 
     <div class="field">
-      <label>Full name</label>
+      <label>Name</label>
       <input type="text" id="reg-name">
     </div>
 
     <div class="field">
-      <label>Phone Number</label>
-      <input type="tel" id="reg-phone" placeholder="0712345678">
+      <label>Phone</label>
+      <input type="tel" id="reg-phone">
     </div>
 
     <button class="btn-full blue" onclick="startPhoneAuth()">
       Send OTP
     </button>
 
-    <!-- OTP SECTION -->
-    <div id="otp-section" style="display:none;margin-top:10px">
+    <div id="otp-section" style="display:none">
+
       <div class="field">
-        <label>Enter OTP</label>
+        <label>OTP</label>
         <input type="text" id="otp-code">
       </div>
 
       <button class="btn-full green" onclick="completeAuth()">
-        Verify & Continue
+        Verify
       </button>
+
     </div>
 
-    <div id="recaptcha-container"></div>
   </div>
 </div>
 
-<!-- DEPOSIT MODAL -->
+<!-- DEPOSIT -->
 <div class="modal-bg" id="deposit-modal">
   <div class="modal">
+
     <button class="modal-close" onclick="closeModal('deposit-modal')">×</button>
-    <div class="modal-title">Deposit Funds</div>
-    <div class="modal-sub">M-Pesa STK push will be sent to your phone</div>
+
+    <div class="modal-title">Deposit</div>
+
     <div class="field">
-      <label>M-Pesa Phone Number</label>
-      <input type="tel" id="dep-phone" placeholder="0712345678">
+      <input type="tel" id="dep-phone" placeholder="Phone">
     </div>
+
     <div class="field">
-      <label>Amount (KES)</label>
-      <input type="number" id="dep-amount" placeholder="e.g. 500" min="10" step="10">
+      <input type="number" id="dep-amount" placeholder="Amount">
     </div>
-    <div class="warning-box">📱 You will receive an M-Pesa prompt on your phone. Enter your PIN to complete the deposit.</div>
-    <button class="btn-full green" id="dep-submit-btn" onclick="doDeposit()">Send M-Pesa Prompt</button>
+
+    <button class="btn-full green" onclick="doDeposit()">
+      Send STK
+    </button>
+
   </div>
 </div>
 
-<!-- WITHDRAW CONFIRM MODAL -->
+<!-- WITHDRAW -->
 <div class="modal-bg" id="withdraw-modal">
   <div class="modal">
+
     <button class="modal-close" onclick="closeModal('withdraw-modal')">×</button>
-    <div class="modal-title">Withdraw Funds</div>
-    <div class="modal-sub">Funds sent directly to M-Pesa</div>
+
+    <div class="modal-title">Withdraw</div>
+
     <div class="field">
-      <label>M-Pesa Phone Number</label>
-      <input type="tel" id="wth-phone" placeholder="0712345678">
+      <input type="tel" id="wth-phone">
     </div>
+
     <div class="field">
-      <label>Amount (KES)</label>
-      <input type="number" id="wth-amount" placeholder="e.g. 3000" min="3000" step="100">
+      <input type="number" id="wth-amount">
     </div>
-    <button class="btn-full orange" id="wth-confirm-btn" onclick="confirmWithdraw()">Preview Withdrawal</button>
+
+    <button class="btn-full orange" onclick="confirmWithdraw()">
+      Withdraw
+    </button>
+
   </div>
 </div>
 
-<!-- WITHDRAW CONFIRMATION SUMMARY MODAL -->
-<div class="modal-bg" id="wth-summary-modal">
-  <div class="modal">
-    <button class="modal-close" onclick="closeModal('wth-summary-modal')">×</button>
-    <div class="modal-title">Confirm Withdrawal</div>
-    <div class="modal-sub">Review your withdrawal details below</div>
-    <div class="wth-summary">
-      <div class="wth-row"><span class="lbl">Sending to</span><span class="val" id="ws-phone">—</span></div>
-      <div class="wth-row"><span class="lbl">Requested amount</span><span class="val" id="ws-amount">—</span></div>
-      <div class="wth-row"><span class="lbl">Processing fee</span><span class="val" style="color:var(--red)">— KES 200</span></div>
-      <div class="wth-row total"><span class="lbl">You receive</span><span class="val green" id="ws-receive">—</span></div>
-    </div>
-    <div class="warning-box">⚠️ Withdrawals are processed instantly via M-Pesa. Ensure your phone is on and can receive funds. This action cannot be reversed.</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <button class="btn-full" style="background:var(--surface3);color:var(--muted)" onclick="closeModal('wth-summary-modal')">Cancel</button>
-      <button class="btn-full orange" id="wth-final-btn" onclick="doWithdraw()">Confirm & Send</button>
-    </div>
-  </div>
-</div>
-
-<!-- STK WAITING MODAL -->
-<div class="modal-bg" id="stk-modal">
-  <div class="modal" style="text-align:center">
-    <div class="stk-icon" id="stk-icon">📲</div>
-    <div class="modal-title" id="stk-title">Check Your Phone</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:16px" id="stk-desc">
-      An M-Pesa STK push has been sent to <span class="stk-phone" id="stk-phone-display"></span>
-    </div>
-    <div class="stk-steps" id="stk-steps">
-      <div class="stk-step"><div class="num">1</div>Check your M-Pesa prompt notification</div>
-      <div class="stk-step"><div class="num">2</div>Enter your M-Pesa PIN to confirm</div>
-      <div class="stk-step"><div class="num">3</div>Wait for payment confirmation below</div>
-    </div>
-    <div class="status-pill pending" id="stk-status-pill">
-      <span class="pulse-ring"></span> Waiting for payment…
-    </div>
-    <button class="btn-full" style="background:var(--surface3);color:var(--muted);margin-top:12px" onclick="cancelSTKWait()">Cancel</button>
-  </div>
-</div>
-
+<!-- TOAST -->
 <div id="toast"></div>
+
+<!-- SCRIPTS -->
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
 <script type="module" src="./firebase.js"></script>
 <script type="module" src="./auth.js"></script>
 <script type="module" src="./aviator.js"></script>
-<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
 </body>
 </html>
