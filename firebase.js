@@ -5,6 +5,7 @@ import {
   signInWithPhoneNumber
 } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
 
+// 🔥 YOUR CONFIG
 const firebaseConfig = {
   apiKey: "AIzaSyBb-NBiJNfMjuLUn6IsoAEWiiox0x45xEY",
   authDomain: "aviator-78db3.firebaseapp.com",
@@ -14,60 +15,51 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
-let confirmationResult;
+let confirmationResult = null;
 
-// ✅ ALWAYS ENSURE RECAPTCHA EXISTS
-async function ensureRecaptcha() {
-  if (!window.recaptchaVerifier) {
-    window.recaptchaVerifier = new RecaptchaVerifier(
-      auth,
-      "recaptcha-container",
-      {
-        size: "normal", // change to "invisible" later
-      }
-    );
+// ✅ INIT RECAPTCHA
+window.addEventListener("load", () => {
+  console.log("🔥 Initializing reCAPTCHA...");
 
-    await window.recaptchaVerifier.render();
-  }
-}
+  window.recaptchaVerifier = new RecaptchaVerifier(
+    auth,
+    "recaptcha-container",
+    {
+      size: "normal"
+    }
+  );
+
+  window.recaptchaVerifier.render()
+    .then(() => console.log("✅ reCAPTCHA ready"))
+    .catch(err => console.error("❌ reCAPTCHA error", err));
+});
 
 // ✅ SEND OTP
 window.sendOTP = async (phone) => {
-  try {
-    if (!phone.startsWith("+")) {
-      throw new Error("Use format: +2547XXXXXXXX");
-    }
+  console.log("📲 Sending OTP to:", phone);
 
-    await ensureRecaptcha(); // 🔥 FIX
-
-    confirmationResult = await signInWithPhoneNumber(
-      auth,
-      phone,
-      window.recaptchaVerifier
-    );
-
-    return true;
-
-  } catch (err) {
-    console.error("OTP ERROR:", err);
-
-    // 🔥 reset recaptcha if it breaks
-    if (window.recaptchaVerifier) {
-      window.recaptchaVerifier.clear();
-      window.recaptchaVerifier = null;
-    }
-
-    alert(err.message);
-    throw err;
+  if (!window.recaptchaVerifier) {
+    throw new Error("reCAPTCHA not ready");
   }
+
+  confirmationResult = await signInWithPhoneNumber(
+    auth,
+    phone,
+    window.recaptchaVerifier
+  );
+
+  console.log("✅ OTP SENT");
+  return true;
 };
 
 // ✅ VERIFY OTP
 window.verifyOTP = async (code) => {
   if (!confirmationResult) {
-    throw new Error("No OTP session. Click send OTP again.");
+    throw new Error("No OTP session");
   }
 
   const result = await confirmationResult.confirm(code);
+  console.log("✅ OTP VERIFIED");
+
   return result.user;
 };
