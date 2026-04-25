@@ -94,7 +94,7 @@
         </div>
 
         <div class="btn-row">
-          <button class="btn-bet" onclick="startGame()">Place Bet</button>
+          <button class="btn-bet" id="btn-bet" onclick="startGame()">Place Bet</button>
           <button class="btn-cash" id="btn-cash" disabled onclick="cashOut()">Cash Out</button>
         </div>
       </div>
@@ -124,7 +124,6 @@
     </button>
 
     <!-- OTP INSIDE MODAL -->
-    <div id="login-otp" style="display:none">
 
       <div class="field">
         <label>Enter OTP</label>
@@ -222,6 +221,14 @@
     </button>
 
   </div>
+</div>
+
+<!-- MOBILE CONTROLS -->
+<div id="mobile-controls" style="display:none">
+  <input id="m-bet" type="number" value="100">
+  <input id="m-auto" type="number" value="2">
+  <button id="m-btn-bet" onclick="startGame()">Bet</button>
+  <button id="m-btn-cash" disabled onclick="cashOut()">Cash</button>
 </div>
 
 <!-- TOAST -->

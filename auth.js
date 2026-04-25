@@ -1,6 +1,6 @@
 const API = "https://aviator-9raf.onrender.com/api";
 
-// FORMAT PHONE
+// ========== FORMAT PHONE ==========
 function formatPhone(p) {
   p = p.replace(/\D/g, "");
   if (p.startsWith("0")) p = "254" + p.slice(1);
@@ -8,102 +8,81 @@ function formatPhone(p) {
   return "+" + p;
 }
 
-// SEND OTP
+// ========== REGISTER ==========
 window.startPhoneAuth = async function () {
-  const phoneInput = document.getElementById("reg-phone").value;
-  const phone = formatPhone(phoneInput);
+  const phone = formatPhone(document.getElementById("reg-phone").value);
 
   try {
     await sendOTP(phone);
     document.getElementById("otp-section").style.display = "block";
-    alert("OTP sent!");
   } catch (err) {
-    alert("Failed to send OTP");
+    console.log(err);
+    alert("OTP failed");
   }
 };
 
-// VERIFY OTP + LOGIN / REGISTER
 window.completeAuth = async function () {
   const code = document.getElementById("otp-code").value;
-  const phoneInput = document.getElementById("reg-phone").value;
   const name = document.getElementById("reg-name").value;
 
   try {
     const user = await verifyOTP(code);
-const idToken = await user.getIdToken();
+    const idToken = await user.getIdToken();
 
-    //  SEND TO BACKEND
     const res = await fetch(API + "/auth/phone-login", {
-     method: "POST",
-     headers: {
-    "Content-Type": "application/json",
-    "Authorization": "Bearer " + idToken
-  },
-  body: JSON.stringify({
-    phone: phoneInput,
-    name: name
-  })
-});
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + idToken
+      },
+      body: JSON.stringify({ name })
+    });
 
     const data = await res.json();
-
     if (!res.ok) throw new Error(data.message);
 
-    // SAVE SESSION
     localStorage.setItem("av_token", data.token);
-    localStorage.setItem("av_user", JSON.stringify(data.user));
-
-    alert("Login successful!");
     location.reload();
-
   } catch (err) {
-    alert("Verification failed");
+    console.log(err);
+    alert("Signup failed");
   }
 };
 
-//login
-
+// ========== LOGIN ==========
 window.startPhoneLogin = async function () {
-  const phoneInput = document.getElementById("login-phone").value;
-  const phone = formatPhone(phoneInput);
+  const phone = formatPhone(document.getElementById("login-phone").value);
 
   try {
     await sendOTP(phone);
     document.getElementById("login-otp").style.display = "block";
-    alert("OTP sent!");
   } catch (err) {
-    alert("Failed to send OTP");
+    alert("OTP failed");
   }
 };
 
 window.verifyPhoneLogin = async function () {
   const code = document.getElementById("login-code").value;
-  const phoneInput = document.getElementById("login-phone").value;
 
   try {
-    await verifyOTP(code);
+    const user = await verifyOTP(code);
+    const idToken = await user.getIdToken();
 
     const res = await fetch(API + "/auth/phone-login", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        phone: phoneInput
-      })
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + idToken
+      }
     });
 
     const data = await res.json();
-
     if (!res.ok) throw new Error(data.message);
 
     localStorage.setItem("av_token", data.token);
-    localStorage.setItem("av_user", JSON.stringify(data.user));
-
-    alert("Login successful!");
     location.reload();
-
   } catch (err) {
+    console.log(err);
     alert("Login failed");
   }
 };

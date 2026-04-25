@@ -1,4 +1,3 @@
-// ========== CONFIG ==========
 const API = "https://aviator-9raf.onrender.com/api";
 const SOCKET_URL = "https://aviator-9raf.onrender.com";
 
@@ -6,18 +5,17 @@ let socket;
 let token = localStorage.getItem("av_token");
 
 let currentMult = 1;
-let flying = false;
 let hasBet = false;
 
+// ========== SAFE ==========
+const el = (id) => document.getElementById(id);
+
 // ========== INIT ==========
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", () => {
   connectSocket();
   handleResponsive();
 
-  if (token) {
-    await fetchWallet();
-    unlockUI();
-  }
+  if (token) fetchWallet();
 });
 
 // ========== SOCKET ==========
@@ -26,81 +24,52 @@ function connectSocket() {
     auth: { token }
   });
 
-  socket.on("connect", () => {
-    console.log("✅ Connected to game server");
-    fetchWallet();
-  });
+  socket.on("connect", () => fetchWallet());
 
   socket.on("round_start", () => {
-    flying = true;
     currentMult = 1;
     hasBet = false;
-
     hideCrash();
     updateMultiplier(1);
-
     enableBet();
     disableCashout();
   });
 
-  socket.on("game_tick", (data) => {
-    currentMult = data.multiplier;
-    flying = true;
-
+  socket.on("game_tick", (d) => {
+    currentMult = d.multiplier;
     updateMultiplier(currentMult);
     animatePlane(currentMult);
   });
 
-  socket.on("round_crash", (data) => {
-    flying = false;
-
-    showCrash(data.crashPoint);
-
-    disableCashout();
+  socket.on("round_crash", (d) => {
+    showCrash(d.crashPoint);
     enableBet();
+    disableCashout();
   });
 
-  socket.on("bet_placed", (data) => {
+  socket.on("bet_placed", (d) => {
     hasBet = true;
-
-    toast(`Bet: KES ${data.amount}`, "success");
-
+    toast("Bet placed KES " + d.amount);
     disableBet();
     enableCashout();
-
-    addFeed("You placed bet", "you");
   });
 
-  socket.on("cashout_success", (data) => {
+  socket.on("cashout_success", (d) => {
     hasBet = false;
-
-    toast(`💰 Cashed at ${data.multiplier}x`, "success");
-
-    addFeed(`You won ${data.payout}`, "win");
-
-    disableCashout();
+    toast("Cashed " + d.multiplier + "x");
     fetchWallet();
   });
 
-  socket.on("live_bet", (data) => {
-    addFeed(`${maskPhone(data.phone)} bet KES ${data.amount}`);
-  });
-
-  socket.on("error_msg", (msg) => {
-    toast(msg, "error");
-  });
+  socket.on("error_msg", (m) => toast(m));
 }
 
 // ========== GAME ==========
 function startGame() {
   if (!token) return openModal("login-modal");
 
-  const amount = parseFloat(getBetInput());
-  const autoCashout = parseFloat(getAutoInput());
-
   socket.emit("place_bet", {
-    amount,
-    autoCashout
+    amount: Number(el("bet-input")?.value || 0),
+    autoCashout: Number(el("auto-input")?.value || 2)
   });
 }
 
@@ -109,101 +78,50 @@ function cashOut() {
   socket.emit("cashout");
 }
 
-// ========== INPUT ==========
-function getBetInput() {
-  const el = document.getElementById("bet-input");
-  return el ? el.value : 0;
+// ========== UI SAFE ==========
+function updateMultiplier(v) {
+  if (el("mult-el")) el("mult-el").innerText = v.toFixed(2) + "x";
 }
 
-function getAutoInput() {
-  const el = document.getElementById("auto-input");
-  return el ? el.value : 2;
-}
-
-// ========== UI SAFE FIX ==========
-function updateMultiplier(val) {
-  const el = document.getElementById("mult-el");
-  if (el) el.innerText = val.toFixed(2) + "x";
-}
-
-function showCrash(point) {
-  const el = document.getElementById("crash-overlay");
-  if (!el) return;
-
-  el.style.display = "flex";
-
-  const cs = document.getElementById("crash-cs");
-  if (cs) cs.innerText = "at " + point + "x";
+function showCrash(p) {
+  const o = el("crash-overlay");
+  if (!o) return;
+  o.style.display = "flex";
+  if (el("crash-cs")) el("crash-cs").innerText = "at " + p + "x";
 }
 
 function hideCrash() {
-  const el = document.getElementById("crash-overlay");
-  if (el) el.style.display = "none";
+  if (el("crash-overlay")) el("crash-overlay").style.display = "none";
 }
 
-function animatePlane(mult) {
-  const plane = document.getElementById("plane-el");
-  if (!plane) return;
-
-  const x = Math.min(700, mult * 60);
-  const y = Math.min(200, mult * 40);
-
-  plane.style.left = x + "px";
-  plane.style.bottom = y + "px";
+function animatePlane(m) {
+  const p = el("plane-el");
+  if (!p) return;
+  p.style.left = Math.min(700, m * 60) + "px";
+  p.style.bottom = Math.min(200, m * 40) + "px";
 }
 
-// ========== BUTTON SAFETY ==========
+// ========== BUTTON SAFE ==========
+const safe = (id, state) => el(id)?.setAttribute("disabled", state);
+
 function enableBet() {
-  const a = document.getElementById("btn-bet");
-  const b = document.getElementById("m-btn-bet");
-
-  if (a) a.disabled = false;
-  if (b) b.disabled = false;
+  safe("btn-bet", false);
+  safe("m-btn-bet", false);
 }
 
 function disableBet() {
-  const a = document.getElementById("btn-bet");
-  const b = document.getElementById("m-btn-bet");
-
-  if (a) a.disabled = true;
-  if (b) b.disabled = true;
+  safe("btn-bet", true);
+  safe("m-btn-bet", true);
 }
 
 function enableCashout() {
-  const a = document.getElementById("btn-cash");
-  const b = document.getElementById("m-btn-cash");
-
-  if (a) a.disabled = false;
-  if (b) b.disabled = false;
+  safe("btn-cash", false);
+  safe("m-btn-cash", false);
 }
 
 function disableCashout() {
-  const a = document.getElementById("btn-cash");
-  const b = document.getElementById("m-btn-cash");
-
-  if (a) a.disabled = true;
-  if (b) b.disabled = true;
-}
-
-// ========== FEED ==========
-function addFeed(text, type = "") {
-  const feed = document.getElementById("feed-list");
-  if (!feed) return;
-
-  const div = document.createElement("div");
-  div.className = "fi " + type;
-  div.textContent = text;
-
-  feed.prepend(div);
-
-  if (feed.children.length > 10) {
-    feed.removeChild(feed.lastChild);
-  }
-}
-
-function maskPhone(phone) {
-  if (!phone) return "****";
-  return phone.slice(0, 4) + "****";
+  safe("btn-cash", true);
+  safe("m-btn-cash", true);
 }
 
 // ========== WALLET ==========
@@ -213,123 +131,48 @@ async function fetchWallet() {
       headers: { Authorization: "Bearer " + token }
     });
 
-    const data = await r.json();
-    updateWalletDisplay(data.walletBalance || 0);
-  } catch (e) {
-    console.log(e);
-  }
-}
+    const d = await r.json();
 
-function updateWalletDisplay(balance) {
-  const w = document.getElementById("wallet-bal");
-  const t = document.getElementById("top-bal-val");
+    if (el("wallet-bal"))
+      el("wallet-bal").innerText = "KES " + (d.walletBalance || 0);
 
-  if (w) w.innerText = "KES " + balance;
-  if (t) t.innerText = "KES " + balance;
+    if (el("top-bal-val"))
+      el("top-bal-val").innerText = "KES " + (d.walletBalance || 0);
+  } catch {}
 }
 
 // ========== AUTH ==========
-async function startPhoneLogin() {
-  const phone = document.getElementById("login-phone").value;
+function startPhoneLogin() {}
+function startPhoneAuth() {}
 
-  const res = await fetch(API + "/auth/phone-login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phone })
-  });
-
-  const data = await res.json();
-
-  if (!res.ok || !data.token) {
-    return toast("Login failed", "error");
-  }
-
-  token = data.token;
-  localStorage.setItem("av_token", token);
-
-  closeModal("login-modal");
-  unlockUI();
-  fetchWallet();
-
-  toast("Logged in", "success");
-}
-
-// REGISTER (same endpoint fixed)
-async function startPhoneAuth() {
-  const name = document.getElementById("reg-name").value;
-  const phone = document.getElementById("reg-phone").value;
-
-  const res = await fetch(API + "/auth/phone-login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, phone })
-  });
-
-  const data = await res.json();
-
-  if (!res.ok || !data.token) {
-    return toast("Signup failed", "error");
-  }
-
-  token = data.token;
-  localStorage.setItem("av_token", token);
-
-  closeModal("register-modal");
-  unlockUI();
-  fetchWallet();
-
-  toast("Account created", "success");
-}
-
-// ========== UI ==========
-function unlockUI() {
-  const loginBtn = document.getElementById("btn-login-top");
-  const logoutBtn = document.getElementById("btn-logout");
-
-  if (loginBtn) loginBtn.style.display = "none";
-  if (logoutBtn) logoutBtn.style.display = "block";
-
-  const bal = document.getElementById("top-balance");
-  if (bal) bal.style.display = "flex";
-}
-
+// ========== MODALS ==========
 function openModal(id) {
-  const el = document.getElementById(id);
-  if (el) el.classList.add("open");
+  el(id)?.classList.add("open");
 }
 
 function closeModal(id) {
-  const el = document.getElementById(id);
-  if (el) el.classList.remove("open");
+  el(id)?.classList.remove("open");
 }
 
+// ========== RESPONSIVE ==========
 function handleResponsive() {
-  const mobile = window.innerWidth < 900;
-  const el = document.getElementById("mobile-controls");
-  if (el) el.style.display = mobile ? "block" : "none";
+  const m = el("mobile-controls");
+  if (m) m.style.display = window.innerWidth < 900 ? "block" : "none";
 }
-
-window.addEventListener("resize", handleResponsive);
 
 // ========== TOAST ==========
-function toast(msg, type = "") {
-  const el = document.getElementById("toast");
-  if (!el) return;
-
-  el.innerText = msg;
-  el.className = "show " + type;
-
-  setTimeout(() => (el.className = ""), 3000);
+function toast(m) {
+  const t = el("toast");
+  if (!t) return;
+  t.innerText = m;
+  t.className = "show";
+  setTimeout(() => (t.className = ""), 2500);
 }
 
 // expose
 window.startGame = startGame;
 window.cashOut = cashOut;
-window.startPhoneLogin = startPhoneLogin;
-window.startPhoneAuth = startPhoneAuth;
-window.logout = () => {
-  localStorage.removeItem("av_token");
-  location.reload();
-};
 window.openModal = openModal;
 window.closeModal = closeModal;
+window.startPhoneLogin = startPhoneLogin;
+window.startPhoneAuth = startPhoneAuth;
