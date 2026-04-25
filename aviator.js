@@ -7,12 +7,9 @@ let token = localStorage.getItem("av_token");
 let currentMult = 1;
 let hasBet = false;
 
-let tempPhone = "";
-let regPhoneTemp = "";
-
 const el = (id) => document.getElementById(id);
 
-// ========== INIT ==========
+// ================= INIT =================
 document.addEventListener("DOMContentLoaded", () => {
   handleResponsive();
 
@@ -23,7 +20,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-// ========== SOCKET ==========
+// ================= SOCKET =================
 function connectSocket() {
   if (socket) socket.disconnect();
 
@@ -73,11 +70,13 @@ function connectSocket() {
   socket.on("error_msg", (m) => toast(m));
 }
 
-// ========== PHONE FORMAT ==========
+// ================= PHONE FORMAT =================
 function formatPhone(input) {
   let phone = input.replace(/\D/g, "");
 
-  if (phone.startsWith("0")) phone = "254" + phone.slice(1);
+  if (phone.startsWith("0")) {
+    phone = "254" + phone.slice(1);
+  }
 
   if (!phone.startsWith("254")) {
     throw new Error("Use format 07XXXXXXXX");
@@ -86,11 +85,11 @@ function formatPhone(input) {
   return "+" + phone;
 }
 
-// ========== OTP REQUEST ==========
+// ================= OTP =================
 async function sendOtpRequest(phone) {
   const res = await fetch(API + "/auth/send-otp", {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ phone })
   });
 
@@ -100,11 +99,11 @@ async function sendOtpRequest(phone) {
   return true;
 }
 
-async function verifyOtpRequest(phone, code, name="") {
+async function verifyOtpRequest(phone, otp, name = "") {
   const res = await fetch(API + "/auth/verify-otp", {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ phone, code, name })
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phone, otp, name })
   });
 
   const data = await res.json();
@@ -113,50 +112,32 @@ async function verifyOtpRequest(phone, code, name="") {
   return data;
 }
 
-// ========== LOGIN ==========
+// ================= LOGIN =================
 async function startPhoneLogin() {
   try {
-    const raw = el("login-phone")?.value;
+    const raw = el("login-phone").value;
     const phone = formatPhone(raw);
 
-    await fetch(API + "/auth/send-otp", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ phone })
-    });
+    await sendOtpRequest(phone);
 
     el("login-otp").style.display = "block";
     toast("OTP sent");
 
   } catch (err) {
     console.error(err);
-    toast("Failed to send OTP");
+    toast(err.message);
   }
 }
 
-
-
 async function verifyPhoneLogin() {
-  const code = el("login-code")?.value;
-  const raw = el("login-phone")?.value;
-
-  if (!code) return toast("Enter OTP");
-
-  const phone = formatPhone(raw);
-
   try {
-    const res = await fetch(API + "/auth/verify-otp", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ phone, code })
-    });
+    const rawPhone = el("login-phone").value;
+    const phone = formatPhone(rawPhone);
+    const otp = el("login-code").value;
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message);
+    if (!otp) return toast("Enter OTP");
+
+    const data = await verifyOtpRequest(phone, otp);
 
     token = data.token;
     localStorage.setItem("av_token", token);
@@ -174,48 +155,32 @@ async function verifyPhoneLogin() {
   }
 }
 
-// ========== REGISTER ==========
+// ================= REGISTER =================
 async function startPhoneAuth() {
   try {
-    const raw = el("reg-phone")?.value;
+    const raw = el("reg-phone").value;
     const phone = formatPhone(raw);
 
-    await fetch(API + "/auth/send-otp", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ phone })
-    });
+    await sendOtpRequest(phone);
 
     el("otp-section").style.display = "block";
     toast("OTP sent");
 
   } catch (err) {
-    toast("Failed to send OTP");
+    toast(err.message);
   }
 }
 
 async function completeAuth() {
-  const code = el("otp-code")?.value;
-  const name = el("reg-name")?.value;
-  const raw = el("reg-phone")?.value;
-
-  if (!code) return toast("Enter OTP");
-
-  const phone = formatPhone(raw);
-
   try {
-    const res = await fetch(API + "/auth/verify-otp", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ phone, code, name })
-    });
+    const raw = el("reg-phone").value;
+    const phone = formatPhone(raw);
+    const otp = el("otp-code").value;
+    const name = el("reg-name").value;
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message);
+    if (!otp) return toast("Enter OTP");
+
+    const data = await verifyOtpRequest(phone, otp, name);
 
     token = data.token;
     localStorage.setItem("av_token", token);
@@ -233,7 +198,7 @@ async function completeAuth() {
   }
 }
 
-// ========== WALLET ==========
+// ================= WALLET =================
 async function fetchWallet() {
   if (!token) return;
 
@@ -252,10 +217,12 @@ async function fetchWallet() {
     el("wallet-bal").innerText = "KES " + (d.walletBalance || 0);
     el("top-bal-val").innerText = "KES " + (d.walletBalance || 0);
 
-  } catch {}
+  } catch (e) {
+    console.log(e);
+  }
 }
 
-// ========== PAYMENTS ==========
+// ================= PAYMENTS =================
 function openDepositModal() {
   openModal("deposit-modal");
 }
@@ -265,10 +232,10 @@ function openWithdrawModal() {
 }
 
 async function doDeposit() {
-  const phone = formatPhone(el("dep-phone").value);
-  const amount = Number(el("dep-amount").value);
-
   try {
+    const phone = formatPhone(el("dep-phone").value);
+    const amount = Number(el("dep-amount").value);
+
     const res = await fetch(API + "/payment/stk-push", {
       method: "POST",
       headers: {
@@ -279,20 +246,19 @@ async function doDeposit() {
     });
 
     const data = await res.json();
-
     if (!res.ok) throw new Error(data.message);
 
-    toast("STK sent. Check phone");
+    toast("STK sent");
 
-  } catch (e) {
-    toast(e.message);
+  } catch (err) {
+    toast(err.message);
   }
 }
 
 async function confirmWithdraw() {
-  const amount = Number(el("wth-amount").value);
-
   try {
+    const amount = Number(el("wth-amount").value);
+
     const res = await fetch(API + "/wallet/withdraw", {
       method: "POST",
       headers: {
@@ -308,12 +274,12 @@ async function confirmWithdraw() {
     toast("Withdraw successful");
     fetchWallet();
 
-  } catch (e) {
-    toast(e.message);
+  } catch (err) {
+    toast(err.message);
   }
 }
 
-// ========== GAME ==========
+// ================= GAME =================
 function startGame() {
   if (!token) return openModal("login-modal");
 
@@ -328,7 +294,7 @@ function cashOut() {
   socket.emit("cashout");
 }
 
-// ========== UI ==========
+// ================= UI =================
 function updateMultiplier(v) {
   el("mult-el").innerText = v.toFixed(2) + "x";
 }
@@ -348,7 +314,7 @@ function animatePlane(m) {
   p.style.bottom = Math.min(200, m * 40) + "px";
 }
 
-// ========== HELPERS ==========
+// ================= HELPERS =================
 function enableBet() { el("btn-bet").disabled = false; }
 function disableBet() { el("btn-bet").disabled = true; }
 function enableCashout() { el("btn-cash").disabled = false; }
@@ -379,7 +345,7 @@ function toast(m) {
   setTimeout(() => (t.className = ""), 2500);
 }
 
-// ========== EXPORT ==========
+// ================= EXPORT =================
 window.startGame = startGame;
 window.cashOut = cashOut;
 window.startPhoneLogin = startPhoneLogin;
