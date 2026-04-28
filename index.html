@@ -3,43 +3,39 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aviator — Fly & Win</title>
-
+<title>AVIATOR — Fly & Win</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./aviator.css">
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 </head>
-
 <body>
-
 <div id="app">
 
   <!-- TOP BAR -->
   <div class="topbar">
     <div class="logo">AVIA<span>TOR</span></div>
-
+    <div class="topbar-center" id="crash-bar"></div>
     <div class="topbar-right">
       <div class="balance-chip" id="top-balance" style="display:none">
-        <span class="lbl">Balance</span>
+        <span class="lbl">BAL</span>
         <span id="top-bal-val">KES 0</span>
       </div>
-
-      <button class="btn-icon" id="btn-logout" style="display:none" onclick="logout()">Logout</button>
-
-      <button class="btn-auth" onclick="openModal('login-modal')">Sign In</button>
-      <button class="btn-auth" onclick="openModal('register-modal')">Sign Up</button>
+      <button class="btn-icon" id="btn-logout" style="display:none" onclick="logout()">⏻ Logout</button>
+      <button class="btn-auth" id="btn-signin" onclick="openModal('login-modal')">Sign In</button>
+      <button class="btn-auth btn-auth-outline" id="btn-signup" onclick="openModal('register-modal')">Sign Up</button>
     </div>
   </div>
-
-  <!-- CRASH HISTORY (OUTSIDE SKY) -->
-  <div id="crash-bar"></div>
 
   <!-- MAIN -->
   <div class="main">
 
-    <!-- LEFT -->
+    <!-- LEFT GAME AREA -->
     <div class="left">
 
+      <!-- SKY -->
       <div id="sky">
+        <canvas id="trail-cvs"></canvas>
+        <div id="stars-layer"></div>
         <div id="plane-el">✈️</div>
 
         <div id="mult-display">
@@ -48,16 +44,19 @@
         </div>
 
         <div id="crash-overlay">
-          <div class="ct">CRASHED</div>
-          <div class="cs" id="crash-cs"></div>
+          <div class="ct">FLEW AWAY</div>
+          <div class="cs" id="crash-cs">at 1.00x</div>
+        </div>
+
+        <div id="countdown-banner" style="display:none">
+          <div class="cd-inner">
+            <span class="cd-label">Next round in</span>
+            <span class="cd-num" id="cd-num">10</span>
+          </div>
         </div>
       </div>
 
-      <!-- HISTORY -->
-      <div class="feed-wrap">
-        <div class="feed-title">My Transactions</div>
-        <div id="history-list"></div>
-      </div>
+     
 
     </div>
 
@@ -65,60 +64,248 @@
     <div class="sidebar">
 
       <!-- WALLET -->
-      <div class="card">
-        <div class="card-title">My Wallet</div>
-
+      <div class="card wallet-card">
+        <div class="card-title"> My Wallet</div>
         <div class="wallet-bal" id="wallet-bal">KES 0</div>
-
+        <div class="wallet-sub" id="wallet-sub">Login to see balance</div>
         <div class="wallet-btns">
-          <button class="w-btn dep" onclick="openDeposit()">Deposit</button>
-          <button class="w-btn wth" onclick="openModal('withdraw-modal')" disabled>Withdraw</button>
+          <button class="w-btn dep" id="btn-deposit" onclick="openDeposit()">⬇ Deposit</button>
+          <button class="w-btn wth" id="btn-withdraw" onclick="openWithdraw()" disabled>⬆ Withdraw</button>
         </div>
       </div>
 
-      <!-- BET -->
-      <div class="card">
-        <div class="card-title">Bet Controls</div>
+      <!-- BET CONTROLS -->
+      <div class="card bet-card">
+        <div class="card-title"> Place Bet</div>
 
-        <div class="field">
-          <label>Bet amount</label>
-          <input type="number" id="bet-input" value="100">
+        <div class="quick-amounts">
+          <button onclick="setAmount(50)">50</button>
+          <button onclick="setAmount(100)">100</button>
+          <button onclick="setAmount(200)">200</button>
+          <button onclick="setAmount(500)">500</button>
         </div>
 
         <div class="field">
-          <label>Auto cashout</label>
-          <input type="number" id="auto-input" value="2">
+          <label>Stake (min KES 30)</label>
+          <input type="number" id="bet-input" value="100" min="30" step="10">
+        </div>
+
+        <div class="field">
+          <label>Auto Cashout at</label>
+          <input type="number" id="auto-input" value="2.00" min="1.1" step="0.1">
         </div>
 
         <div class="btn-row">
-          <button class="btn-bet" id="btn-bet" onclick="startGame()">Bet</button>
+          <button class="btn-bet" id="btn-bet" onclick="startGame()" disabled>Place Bet</button>
           <button class="btn-cash" id="btn-cash" onclick="cashOut()" disabled>Cash Out</button>
         </div>
+        <div class="bet-status" id="bet-status"></div>
       </div>
 
     </div>
   </div>
 </div>
 
-<!-- MODALS (UNCHANGED BUT WORKING) -->
-<div class="modal-bg" id="login-modal"></div>
-<div class="modal-bg" id="register-modal"></div>
-<div class="modal-bg" id="reset-modal"></div>
+<!-- ====== MODALS ====== -->
 
-<div class="modal-bg" id="deposit-modal">
+<!-- LOGIN MODAL -->
+<div class="modal-bg" id="login-modal">
   <div class="modal">
-    <button class="modal-close" onclick="closeModal('deposit-modal')">×</button>
-    <div class="modal-title">Deposit</div>
+    <button class="modal-close" onclick="closeModal('login-modal')">×</button>
+    <div class="modal-icon">✈️</div>
+    <div class="modal-title">Welcome Back</div>
+    <div class="modal-sub">Sign in to your Aviator account</div>
 
-    <input id="dep-phone" placeholder="2547XXXXXXXX">
-    <input id="dep-amount" placeholder="Amount">
+    <div class="field">
+      <label>Phone Number</label>
+      <input type="tel" id="login-phone" placeholder="0712345678" maxlength="12">
+    </div>
+    <div class="field">
+      <label>4-Digit PIN</label>
+      <input type="password" id="login-pin" placeholder="••••" maxlength="4" inputmode="numeric">
+    </div>
 
-    <button onclick="doDeposit()" class="btn-full green">Pay via M-Pesa</button>
+    <button class="btn-full green" id="btn-login-submit" onclick="doLogin()">Sign In</button>
+
+    <div class="modal-switch">
+      <a onclick="switchModal('login-modal','register-modal')">No account? Sign Up</a>
+      &nbsp;·&nbsp;
+      <a onclick="switchModal('login-modal','reset-modal')">Forgot PIN?</a>
+    </div>
   </div>
 </div>
 
-<div class="modal-bg" id="withdraw-modal"></div>
+<!-- REGISTER MODAL -->
+<div class="modal-bg" id="register-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('register-modal')">×</button>
+    <div class="modal-icon">🚀</div>
+    <div class="modal-title">Create Account</div>
+    <div class="modal-sub">Join Aviator & get <span class="bonus-tag">KES 30 Bonus!</span></div>
 
+    <div class="field">
+      <label>Full Name</label>
+      <input type="text" id="reg-name" placeholder="John Doe">
+    </div>
+    <div class="field">
+      <label>Phone Number</label>
+      <div class="input-row">
+        <input type="tel" id="reg-phone" placeholder="0712345678" maxlength="12">
+        <button class="btn-otp" id="btn-reg-otp" onclick="sendRegOtp()">Send OTP</button>
+      </div>
+    </div>
+    <div class="field" id="reg-otp-field" style="display:none">
+      <label>Enter OTP</label>
+      <input type="text" id="reg-otp" placeholder="6-digit OTP" maxlength="6" inputmode="numeric">
+    </div>
+    <div class="field">
+      <label>Create 4-Digit PIN</label>
+      <input type="password" id="reg-pin" placeholder="••••" maxlength="4" inputmode="numeric">
+    </div>
+    <div class="field">
+      <label>Confirm PIN</label>
+      <input type="password" id="reg-pin2" placeholder="••••" maxlength="4" inputmode="numeric">
+    </div>
+
+    <button class="btn-full green" id="btn-reg-submit" onclick="doRegister()">Create Account & Claim Bonus</button>
+
+    <div class="modal-switch">
+      Already have an account? <a onclick="switchModal('register-modal','login-modal')">Sign In</a>
+    </div>
+  </div>
+</div>
+
+<!-- RESET PIN MODAL -->
+<div class="modal-bg" id="reset-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('reset-modal')">×</button>
+    <div class="modal-icon">🔐</div>
+    <div class="modal-title">Reset PIN</div>
+    <div class="modal-sub">Enter your phone to receive OTP</div>
+
+    <div class="field">
+      <label>Phone Number</label>
+      <div class="input-row">
+        <input type="tel" id="reset-phone" placeholder="0712345678" maxlength="12">
+        <button class="btn-otp" id="btn-reset-otp" onclick="sendResetOtp()">Send OTP</button>
+      </div>
+    </div>
+    <div class="field" id="reset-otp-field" style="display:none">
+      <label>OTP Code</label>
+      <input type="text" id="reset-otp" placeholder="6-digit OTP" maxlength="6" inputmode="numeric">
+    </div>
+    <div class="field" id="reset-pin-field" style="display:none">
+      <label>New PIN</label>
+      <input type="password" id="reset-pin" placeholder="••••" maxlength="4" inputmode="numeric">
+    </div>
+
+    <button class="btn-full orange" id="btn-reset-submit" onclick="doResetPin()" style="display:none">Reset PIN</button>
+
+    <div class="modal-switch">
+      <a onclick="switchModal('reset-modal','login-modal')">Back to Sign In</a>
+    </div>
+  </div>
+</div>
+
+<!-- DEPOSIT MODAL -->
+<div class="modal-bg" id="deposit-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('deposit-modal')">×</button>
+    <div class="modal-icon">💳</div>
+    <div class="modal-title">Deposit</div>
+    <div class="modal-sub">Min KES 100 via M-Pesa STK Push</div>
+
+    <div class="field">
+      <label>M-Pesa Phone</label>
+      <input type="tel" id="dep-phone" placeholder="0712345678" maxlength="12">
+    </div>
+    <div class="field">
+      <label>Amount (KES)</label>
+      <input type="number" id="dep-amount" placeholder="100" min="100">
+    </div>
+
+    <div class="quick-amounts" style="margin-bottom:14px">
+      <button onclick="setDepAmount(100)">100</button>
+      <button onclick="setDepAmount(200)">200</button>
+      <button onclick="setDepAmount(500)">500</button>
+      <button onclick="setDepAmount(1000)">1000</button>
+    </div>
+
+    <button class="btn-full green" id="btn-dep-submit" onclick="doDeposit()"> Pay via M-Pesa</button>
+  </div>
+</div>
+
+<!-- STK WAITING MODAL -->
+<div class="modal-bg" id="stk-modal">
+  <div class="modal">
+    <div class="modal-icon stk-spin">📱</div>
+    <div class="modal-title">Check Your Phone</div>
+
+    <div class="stk-msg">
+      M-Pesa prompt sent to <span class="stk-phone" id="stk-phone-display">your phone</span>.<br>
+      Enter your M-Pesa PIN to complete.
+    </div>
+
+    <div class="stk-steps">
+      <div class="stk-step"><div class="num">1</div>Check your M-Pesa notification</div>
+      <div class="stk-step"><div class="num">2</div>Enter your M-Pesa PIN</div>
+      <div class="stk-step"><div class="num">3</div>Balance updates automatically</div>
+    </div>
+
+    <div class="status-pill pending" id="stk-status">
+      <span class="pulse-ring"></span> Waiting for payment...
+    </div>
+
+    <button class="btn-full" style="margin-top:12px;background:var(--surface3);color:var(--muted)" onclick="closeModal('stk-modal')">Close</button>
+  </div>
+</div>
+
+<!-- WITHDRAW MODAL -->
+<div class="modal-bg" id="withdraw-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('withdraw-modal')">×</button>
+    <div class="modal-icon">🏦</div>
+    <div class="modal-title">Withdraw</div>
+    <div class="modal-sub">Min KES 500 · Sent to M-Pesa</div>
+
+    <div class="field">
+      <label>M-Pesa Phone</label>
+      <input type="tel" id="wth-phone" placeholder="0712345678" maxlength="12">
+    </div>
+    <div class="field">
+      <label>Amount (KES)</label>
+      <input type="number" id="wth-amount" placeholder="500" min="500">
+    </div>
+
+    <div class="wth-summary" id="wth-summary" style="display:none">
+      <div class="wth-row"><span class="lbl">Amount</span><span class="val" id="wth-s-amount">-</span></div>
+      <div class="wth-row total"><span class="lbl">You receive</span><span class="val green" id="wth-s-net">-</span></div>
+    </div>
+
+    <div class="warning-box">⚠️ Min withdraw is KES 500. First-time users must have deposited at least once.</div>
+
+    <button class="btn-full orange" id="btn-wth-submit" onclick="doWithdraw()">Request Withdrawal</button>
+  </div>
+</div>
+
+ <!-- MY FLIGHT HISTORY -->
+      <div class="feed-wrap">
+        <div class="feed-title"> My Flight History</div>
+        <div id="history-list"><div class="fi-empty">No bets yet. Place your first bet!</div></div>
+      </div>
+
+<!-- WITHDRAW PENDING MODAL -->
+<div class="modal-bg" id="wth-pending-modal">
+  <div class="modal" style="text-align:center">
+    <div class="modal-icon">⏳</div>
+    <div class="modal-title">Withdrawal Pending</div>
+    <div class="stk-msg">Your withdrawal request is being processed. Funds will be sent to M-Pesa within a few minutes.</div>
+    <div class="status-pill pending" style="margin-top:16px"><span class="pulse-ring"></span> Processing...</div>
+    <button class="btn-full" style="margin-top:14px;background:var(--surface3);color:var(--muted)" onclick="closeModal('wth-pending-modal')">OK, Got it</button>
+  </div>
+</div>
+
+<!-- TOAST -->
 <div id="toast"></div>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
