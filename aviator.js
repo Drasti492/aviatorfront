@@ -4,209 +4,269 @@ const SOCKET_URL = "https://aviator-9raf.onrender.com";
 let socket = null;
 let token = localStorage.getItem("av_token");
 
-let gameState = "WAITING"; // WAITING | FLYING | CRASHED
+let gameState = "WAITING";
 let hasBet = false;
 let currentMult = 1;
+let crashHistory = [];
 
 const el = (id) => document.getElementById(id);
 
 // ================= INIT =================
 document.addEventListener("DOMContentLoaded", () => {
-
-  if (token) {
-    initLoggedIn();
-  }
-
+  if (token) initLoggedIn();
+  else showLoggedOutUI();
 });
 
-// ================= INIT LOGGED IN =================
+// ================= AUTH UI =================
+function showLoggedInUI() {
+  el("btn-logout").style.display = "block";
+  el("top-balance").style.display = "block";
+
+  document.querySelectorAll(".btn-auth").forEach(b => b.style.display = "none");
+  document.querySelectorAll(".w-btn").forEach(b => b.disabled = false);
+}
+
+function showLoggedOutUI() {
+  el("btn-logout").style.display = "none";
+  el("top-balance").style.display = "none";
+
+  document.querySelectorAll(".btn-auth").forEach(b => b.style.display = "inline-block");
+  document.querySelectorAll(".w-btn").forEach(b => b.disabled = true);
+}
+
+// ================= INIT =================
 function initLoggedIn() {
   connectSocket();
   fetchWallet();
+  fetchHistory();
   showLoggedInUI();
 }
 
 // ================= SOCKET =================
 function connectSocket() {
+  socket = io(SOCKET_URL, { auth: { token } });
 
-  socket = io(SOCKET_URL, {
-    auth: { token }
-  });
-
-  socket.on("connect", () => {
-    console.log("✅ Connected");
-  });
-
-  // ===== WAITING (BETTING WINDOW) =====
   socket.on("round_waiting", (d) => {
     gameState = "WAITING";
-
     el("phase-el").innerText = "Next round in " + d.countdown + "s";
 
-    enableBet();
-    disableCashout();
+    renderButtons();
   });
 
-  // ===== ROUND START =====
   socket.on("round_start", () => {
     gameState = "FLYING";
-
-    hasBet = false;
     currentMult = 1;
 
     hideCrash();
     updateMultiplier(1);
 
-    disableBet();
-    disableCashout();
+    renderButtons();
   });
 
-  // ===== GAME TICK =====
   socket.on("game_tick", (d) => {
     currentMult = d.multiplier;
-
     updateMultiplier(currentMult);
     animatePlane(currentMult);
   });
 
-  // ===== CRASH =====
   socket.on("round_crash", (d) => {
     gameState = "CRASHED";
 
     showCrash(d.crashPoint);
 
-    disableCashout();
-    disableBet();
+    // 🔥 store last 5 crashes
+    crashHistory.unshift(d.crashPoint);
+    crashHistory = crashHistory.slice(0, 5);
+    renderCrashHistory();
+
+    hasBet = false;
+    renderButtons();
   });
 
-  // ===== BET CONFIRMED =====
   socket.on("bet_placed", (d) => {
     hasBet = true;
-
     toast("Bet placed KES " + d.amount);
 
-    disableBet();
-    enableCashout();
+    renderButtons();
   });
 
-  // ===== CASHOUT =====
   socket.on("cashout_success", (d) => {
     hasBet = false;
 
     toast("Won KES " + d.payout);
-
     fetchWallet();
 
-    disableCashout();
+    renderButtons();
   });
 
-  // ===== ERROR =====
+  socket.on("leaderboard", (data) => {
+    renderLeaderboard(data);
+  });
+
   socket.on("error_msg", (m) => toast(m));
 }
 
-// ================= GAME ACTIONS =================
+// ================= GAME =================
 function startGame() {
-
-  if (!token) {
-    return openModal("login-modal");
-  }
+  if (!token) return openModal("login-modal");
 
   if (gameState !== "WAITING") {
     return toast("Wait for next round");
   }
 
-  const amount = Number(el("bet-input").value);
-  const auto = Number(el("auto-input").value);
-
   socket.emit("place_bet", {
-    amount,
-    autoCashout: auto
+    amount: Number(el("bet-input").value),
+    autoCashout: Number(el("auto-input").value)
   });
 }
 
 function cashOut() {
   if (!hasBet) return;
-
-  if (gameState !== "FLYING") {
-    return toast("Too late!");
-  }
+  if (gameState !== "FLYING") return toast("Too late!");
 
   socket.emit("cashout");
 }
 
-// ================= WALLET =================
-async function fetchWallet() {
-  if (!token) return;
+// ================= BUTTON STATE (MASTER CONTROL) =================
+function renderButtons() {
+  const betBtn = el("btn-bet");
+  const cashBtn = el("btn-cash");
 
-  try {
-    const res = await fetch(API + "/wallet/me", {
-      headers: { Authorization: "Bearer " + token }
-    });
+  // RESET
+  betBtn.disabled = true;
+  cashBtn.disabled = true;
 
-    if (res.status === 401) return logout();
+  betBtn.style.background = "#444";
+  cashBtn.style.background = "#444";
 
-    const data = await res.json();
+  if (gameState === "WAITING") {
+    betBtn.disabled = false;
+    betBtn.style.background = "#22c55e"; // green
+  }
 
-    el("wallet-bal").innerText = "KES " + data.walletBalance;
-    el("top-bal-val").innerText = "KES " + data.walletBalance;
-
-  } catch (err) {
-    console.log(err);
+  if (gameState === "FLYING") {
+    if (hasBet) {
+      cashBtn.disabled = false;
+      cashBtn.style.background = "#f5a623"; // 🔥 ORANGE ACTIVE
+    }
   }
 }
 
-// ================= DEPOSIT =================
-async function doDeposit() {
+// ================= WALLET =================
+async function fetchWallet() {
+  const res = await fetch(API + "/wallet/me", {
+    headers: { Authorization: "Bearer " + token }
+  });
 
+  if (res.status === 401) return logout();
+
+  const data = await res.json();
+
+  el("wallet-bal").innerText = "KES " + data.walletBalance;
+  el("top-bal-val").innerText = "KES " + data.walletBalance;
+}
+
+// ================= HISTORY =================
+async function fetchHistory() {
   try {
-    const phone = formatPhone(el("dep-phone").value);
-    const amount = Number(el("dep-amount").value);
+    const res = await fetch(API + "/game/history", {
+      headers: { Authorization: "Bearer " + token }
+    });
 
-    if (amount < 100) {
-      return toast("Minimum is 100");
-    }
+    const data = await res.json();
 
+    renderHistory(data);
+  } catch {}
+}
+
+function renderHistory(list) {
+  const wrap = el("history-list");
+  wrap.innerHTML = "";
+
+  list.slice(0, 10).forEach(item => {
+    const div = document.createElement("div");
+    div.className = "fi " + (item.result === "win" ? "win" : "loss");
+    div.innerText = `${item.multiplier}x • KES ${item.amount}`;
+    wrap.appendChild(div);
+  });
+}
+
+// ================= CRASH HISTORY =================
+function renderCrashHistory() {
+  let bar = document.getElementById("crash-bar");
+
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.id = "crash-bar";
+    bar.style.position = "absolute";
+    bar.style.top = "10px";
+    bar.style.left = "50%";
+    bar.style.transform = "translateX(-50%)";
+    bar.style.display = "flex";
+    bar.style.gap = "6px";
+
+    document.getElementById("sky").appendChild(bar);
+  }
+
+  bar.innerHTML = "";
+
+  crashHistory.forEach(v => {
+    const el = document.createElement("div");
+    el.style.padding = "4px 8px";
+    el.style.background = "#222";
+    el.style.borderRadius = "6px";
+    el.style.fontSize = "12px";
+    el.innerText = v + "x";
+    bar.appendChild(el);
+  });
+}
+
+// ================= LEADERBOARD =================
+function renderLeaderboard(data) {
+  let box = document.getElementById("leaderboard");
+
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "leaderboard";
+    box.className = "card";
+    document.querySelector(".sidebar").appendChild(box);
+  }
+
+  box.innerHTML = `<div class="card-title">Top Players</div>`;
+
+  data.slice(0, 5).forEach(p => {
+    const row = document.createElement("div");
+    row.style.fontSize = "13px";
+    row.innerText = `${p.name} — KES ${p.amount}`;
+    box.appendChild(row);
+  });
+}
+
+// ================= DEPOSIT =================
+function openDeposit() {
+  if (!token) return openModal("login-modal");
+  openModal("deposit-modal");
+}
+
+async function doDeposit() {
+  try {
     const res = await fetch(API + "/payment/stk-push", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: "Bearer " + token
       },
-      body: JSON.stringify({ phone, amount })
+      body: JSON.stringify({
+        phone: formatPhone(el("dep-phone").value),
+        amount: Number(el("dep-amount").value)
+      })
     });
 
     const data = await res.json();
-
     if (!res.ok) throw new Error(data.message);
 
     toast("Check your phone 📲");
-
-  } catch (err) {
-    toast(err.message);
-  }
-}
-
-// ================= WITHDRAW =================
-async function confirmWithdraw() {
-
-  try {
-    const amount = Number(el("wth-amount").value);
-
-    const res = await fetch(API + "/wallet/withdraw", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + token
-      },
-      body: JSON.stringify({ amount })
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) throw new Error(data.message);
-
-    toast("Withdraw successful");
-    fetchWallet();
+    closeModal("deposit-modal");
 
   } catch (err) {
     toast(err.message);
@@ -214,101 +274,23 @@ async function confirmWithdraw() {
 }
 
 // ================= AUTH =================
-function formatPhone(input) {
-  let phone = input.replace(/\D/g, "");
-
-  if (phone.startsWith("0")) {
-    phone = "254" + phone.slice(1);
-  }
-
-  return "+" + phone;
-}
-
-async function sendOtp(phone) {
-  const res = await fetch(API + "/auth/send-otp", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ phone })
-  });
-
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message);
-}
-
-async function verifyOtp(phone, otp, name="") {
-  const res = await fetch(API + "/auth/verify-otp", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ phone, code: otp, name })
-  });
-
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message);
-
-  return data;
-}
-
-// LOGIN
-async function startPhoneLogin() {
-  const phone = formatPhone(el("login-phone").value);
-  await sendOtp(phone);
-
-  el("login-otp").style.display = "block";
-  toast("OTP sent");
-}
-
-async function verifyPhoneLogin() {
-  try {
-    const phone = formatPhone(el("login-phone").value);
-    const otp = el("login-code").value;
-
-    const data = await verifyOtp(phone, otp);
-
-    token = data.token;
-    localStorage.setItem("av_token", token);
-
-    initLoggedIn();
-
-    closeModal("login-modal");
-    toast("Welcome back");
-
-  } catch {
-    toast("Invalid OTP");
-  }
-}
-
-// REGISTER
-async function startPhoneAuth() {
-  const phone = formatPhone(el("reg-phone").value);
-  await sendOtp(phone);
-
-  el("otp-section").style.display = "block";
-}
-
-async function completeAuth() {
-  try {
-    const phone = formatPhone(el("reg-phone").value);
-    const otp = el("otp-code").value;
-    const name = el("reg-name").value;
-
-    const data = await verifyOtp(phone, otp, name);
-
-    token = data.token;
-    localStorage.setItem("av_token", token);
-
-    initLoggedIn();
-
-    closeModal("register-modal");
-    toast("Account created");
-
-  } catch {
-    toast("Signup failed");
-  }
+function formatPhone(p) {
+  p = p.replace(/\D/g, "");
+  if (p.startsWith("0")) p = "254" + p.slice(1);
+  return "+" + p;
 }
 
 // ================= UI =================
 function updateMultiplier(v) {
   el("mult-el").innerText = v.toFixed(2) + "x";
+}
+
+function animatePlane(m) {
+  const p = el("plane-el");
+  const progress = Math.min(m / 10, 1);
+
+  p.style.left = (10 + progress * 80) + "%";
+  p.style.bottom = (20 + progress * 150) + "px";
 }
 
 function showCrash(p) {
@@ -318,26 +300,6 @@ function showCrash(p) {
 
 function hideCrash() {
   el("crash-overlay").style.display = "none";
-}
-
-function animatePlane(m) {
-  const p = el("plane-el");
-
-  const progress = Math.min(m / 10, 1);
-
-  p.style.left = (10 + progress * 80) + "%";
-  p.style.bottom = (20 + progress * 150) + "px";
-}
-
-function enableBet() { el("btn-bet").disabled = false; }
-function disableBet() { el("btn-bet").disabled = true; }
-
-function enableCashout() { el("btn-cash").disabled = false; }
-function disableCashout() { el("btn-cash").disabled = true; }
-
-function showLoggedInUI() {
-  el("btn-logout").style.display = "block";
-  el("top-balance").style.display = "block";
 }
 
 function logout() {
@@ -355,15 +317,11 @@ function toast(m) {
   setTimeout(() => t.className = "", 2500);
 }
 
-// ================= EXPORT =================
+// ================= GLOBAL =================
 window.startGame = startGame;
 window.cashOut = cashOut;
-window.startPhoneLogin = startPhoneLogin;
-window.verifyPhoneLogin = verifyPhoneLogin;
-window.startPhoneAuth = startPhoneAuth;
-window.completeAuth = completeAuth;
+window.openDeposit = openDeposit;
 window.doDeposit = doDeposit;
-window.confirmWithdraw = confirmWithdraw;
 window.logout = logout;
 window.openModal = openModal;
 window.closeModal = closeModal;
