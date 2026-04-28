@@ -48,8 +48,7 @@ function connectSocket() {
 
   socket.on("round_waiting", (d) => {
     gameState = "WAITING";
-    el("phase-el").innerText = "Next round in " + d.countdown + "s";
-
+    el("phase-el").innerText = `Next round in ${d.countdown}s`;
     renderButtons();
   });
 
@@ -66,7 +65,7 @@ function connectSocket() {
   socket.on("game_tick", (d) => {
     currentMult = d.multiplier;
     updateMultiplier(currentMult);
-    animatePlane(currentMult);
+    animatePlaneCurve(currentMult);
   });
 
   socket.on("round_crash", (d) => {
@@ -74,36 +73,34 @@ function connectSocket() {
 
     showCrash(d.crashPoint);
 
-    // 🔥 store last 5 crashes
     crashHistory.unshift(d.crashPoint);
     crashHistory = crashHistory.slice(0, 5);
     renderCrashHistory();
 
     hasBet = false;
+    fetchHistory();
+
     renderButtons();
   });
 
   socket.on("bet_placed", (d) => {
     hasBet = true;
     toast("Bet placed KES " + d.amount);
-
     renderButtons();
   });
 
   socket.on("cashout_success", (d) => {
     hasBet = false;
 
-    toast("Won KES " + d.payout);
+    toast(`Won KES ${d.payout}`);
     fetchWallet();
+    fetchHistory();
 
     renderButtons();
   });
 
-  socket.on("leaderboard", (data) => {
-    renderLeaderboard(data);
-  });
-
-  socket.on("error_msg", (m) => toast(m));
+  socket.on("leaderboard", renderLeaderboard);
+  socket.on("error_msg", toast);
 }
 
 // ================= GAME =================
@@ -127,28 +124,20 @@ function cashOut() {
   socket.emit("cashout");
 }
 
-// ================= BUTTON STATE (MASTER CONTROL) =================
+// ================= BUTTONS =================
 function renderButtons() {
   const betBtn = el("btn-bet");
   const cashBtn = el("btn-cash");
 
-  // RESET
   betBtn.disabled = true;
   cashBtn.disabled = true;
 
-  betBtn.style.background = "#444";
-  cashBtn.style.background = "#444";
-
   if (gameState === "WAITING") {
     betBtn.disabled = false;
-    betBtn.style.background = "#22c55e"; // green
   }
 
-  if (gameState === "FLYING") {
-    if (hasBet) {
-      cashBtn.disabled = false;
-      cashBtn.style.background = "#f5a623"; // 🔥 ORANGE ACTIVE
-    }
+  if (gameState === "FLYING" && hasBet) {
+    cashBtn.disabled = false;
   }
 }
 
@@ -169,14 +158,14 @@ async function fetchWallet() {
 // ================= HISTORY =================
 async function fetchHistory() {
   try {
-    const res = await fetch(API + "/game/history", {
+    const res = await fetch(API + "/bets/my", {
       headers: { Authorization: "Bearer " + token }
     });
 
     const data = await res.json();
-
     renderHistory(data);
-  } catch {}
+
+  } catch (e) {}
 }
 
 function renderHistory(list) {
@@ -193,104 +182,44 @@ function renderHistory(list) {
 
 // ================= CRASH HISTORY =================
 function renderCrashHistory() {
-  let bar = document.getElementById("crash-bar");
-
-  if (!bar) {
-    bar = document.createElement("div");
-    bar.id = "crash-bar";
-    bar.style.position = "absolute";
-    bar.style.top = "10px";
-    bar.style.left = "50%";
-    bar.style.transform = "translateX(-50%)";
-    bar.style.display = "flex";
-    bar.style.gap = "6px";
-
-    document.getElementById("sky").appendChild(bar);
-  }
-
+  const bar = el("crash-bar");
   bar.innerHTML = "";
 
   crashHistory.forEach(v => {
-    const el = document.createElement("div");
-    el.style.padding = "4px 8px";
-    el.style.background = "#222";
-    el.style.borderRadius = "6px";
-    el.style.fontSize = "12px";
-    el.innerText = v + "x";
-    bar.appendChild(el);
+    const item = document.createElement("div");
+    item.className = "crash-item";
+    item.innerText = v + "x";
+    bar.appendChild(item);
   });
 }
 
 // ================= LEADERBOARD =================
 function renderLeaderboard(data) {
-  let box = document.getElementById("leaderboard");
-
-  if (!box) {
-    box = document.createElement("div");
-    box.id = "leaderboard";
-    box.className = "card";
-    document.querySelector(".sidebar").appendChild(box);
-  }
-
-  box.innerHTML = `<div class="card-title">Top Players</div>`;
+  const box = el("leaderboard-list");
+  box.innerHTML = "";
 
   data.slice(0, 5).forEach(p => {
     const row = document.createElement("div");
-    row.style.fontSize = "13px";
+    row.className = "lb-row";
     row.innerText = `${p.name} — KES ${p.amount}`;
     box.appendChild(row);
   });
 }
 
-// ================= DEPOSIT =================
-function openDeposit() {
-  if (!token) return openModal("login-modal");
-  openModal("deposit-modal");
-}
+// ================= CURVED PLANE =================
+function animatePlaneCurve(m) {
+  const p = el("plane-el");
 
-async function doDeposit() {
-  try {
-    const res = await fetch(API + "/payment/stk-push", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + token
-      },
-      body: JSON.stringify({
-        phone: formatPhone(el("dep-phone").value),
-        amount: Number(el("dep-amount").value)
-      })
-    });
+  const x = Math.min(m * 12, 90);
+  const y = Math.pow(m, 1.5) * 5;
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message);
-
-    toast("Check your phone 📲");
-    closeModal("deposit-modal");
-
-  } catch (err) {
-    toast(err.message);
-  }
-}
-
-// ================= AUTH =================
-function formatPhone(p) {
-  p = p.replace(/\D/g, "");
-  if (p.startsWith("0")) p = "254" + p.slice(1);
-  return "+" + p;
+  p.style.left = x + "%";
+  p.style.bottom = y + "px";
 }
 
 // ================= UI =================
 function updateMultiplier(v) {
   el("mult-el").innerText = v.toFixed(2) + "x";
-}
-
-function animatePlane(m) {
-  const p = el("plane-el");
-  const progress = Math.min(m / 10, 1);
-
-  p.style.left = (10 + progress * 80) + "%";
-  p.style.bottom = (20 + progress * 150) + "px";
 }
 
 function showCrash(p) {
@@ -300,6 +229,13 @@ function showCrash(p) {
 
 function hideCrash() {
   el("crash-overlay").style.display = "none";
+}
+
+// ================= UTILS =================
+function formatPhone(p) {
+  p = p.replace(/\D/g, "");
+  if (p.startsWith("0")) p = "254" + p.slice(1);
+  return "+" + p;
 }
 
 function logout() {
@@ -320,8 +256,6 @@ function toast(m) {
 // ================= GLOBAL =================
 window.startGame = startGame;
 window.cashOut = cashOut;
-window.openDeposit = openDeposit;
-window.doDeposit = doDeposit;
 window.logout = logout;
 window.openModal = openModal;
 window.closeModal = closeModal;
