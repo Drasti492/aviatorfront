@@ -4,223 +4,134 @@ const SOCKET_URL = "https://aviator-9raf.onrender.com";
 let socket = null;
 let token = localStorage.getItem("av_token");
 
-let currentMult = 1;
+let gameState = "WAITING"; // WAITING | FLYING | CRASHED
 let hasBet = false;
+let currentMult = 1;
 
 const el = (id) => document.getElementById(id);
 
 // ================= INIT =================
 document.addEventListener("DOMContentLoaded", () => {
-  handleResponsive();
 
   if (token) {
-    connectSocket();
-    fetchWallet();
-    showLoggedInUI();
+    initLoggedIn();
   }
+
 });
+
+// ================= INIT LOGGED IN =================
+function initLoggedIn() {
+  connectSocket();
+  fetchWallet();
+  showLoggedInUI();
+}
 
 // ================= SOCKET =================
 function connectSocket() {
-  if (socket) socket.disconnect();
 
   socket = io(SOCKET_URL, {
     auth: { token }
   });
 
   socket.on("connect", () => {
-    console.log("✅ Socket connected");
-    fetchWallet();
+    console.log("✅ Connected");
   });
 
-  socket.on("round_start", () => {
-    currentMult = 1;
-    hasBet = false;
-    hideCrash();
-    updateMultiplier(1);
+  // ===== WAITING (BETTING WINDOW) =====
+  socket.on("round_waiting", (d) => {
+    gameState = "WAITING";
+
+    el("phase-el").innerText = "Next round in " + d.countdown + "s";
+
     enableBet();
     disableCashout();
   });
 
+  // ===== ROUND START =====
+  socket.on("round_start", () => {
+    gameState = "FLYING";
+
+    hasBet = false;
+    currentMult = 1;
+
+    hideCrash();
+    updateMultiplier(1);
+
+    disableBet();
+    disableCashout();
+  });
+
+  // ===== GAME TICK =====
   socket.on("game_tick", (d) => {
     currentMult = d.multiplier;
+
     updateMultiplier(currentMult);
     animatePlane(currentMult);
   });
 
+  // ===== CRASH =====
   socket.on("round_crash", (d) => {
+    gameState = "CRASHED";
+
     showCrash(d.crashPoint);
-    enableBet();
+
     disableCashout();
+    disableBet();
   });
 
+  // ===== BET CONFIRMED =====
   socket.on("bet_placed", (d) => {
     hasBet = true;
+
     toast("Bet placed KES " + d.amount);
+
     disableBet();
     enableCashout();
   });
 
+  // ===== CASHOUT =====
   socket.on("cashout_success", (d) => {
     hasBet = false;
-    toast("Cashed " + d.multiplier + "x");
+
+    toast("Won KES " + d.payout);
+
     fetchWallet();
+
+    disableCashout();
   });
 
-  socket.on("bet_feed", (data) => {
-  addFeed(data);
-});
-
+  // ===== ERROR =====
   socket.on("error_msg", (m) => toast(m));
 }
 
-// ================= PHONE FORMAT =================
-function formatPhone(input) {
-  let phone = input.replace(/\D/g, "");
+// ================= GAME ACTIONS =================
+function startGame() {
 
-  if (phone.startsWith("0")) {
-    phone = "254" + phone.slice(1);
+  if (!token) {
+    return openModal("login-modal");
   }
 
-  if (!phone.startsWith("254")) {
-    throw new Error("Use format 07XXXXXXXX");
+  if (gameState !== "WAITING") {
+    return toast("Wait for next round");
   }
 
-  return "+" + phone;
-}
+  const amount = Number(el("bet-input").value);
+  const auto = Number(el("auto-input").value);
 
-// ================= OTP =================
-async function sendOtpRequest(phone) {
-  const res = await fetch(API + "/auth/send-otp", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phone })
+  socket.emit("place_bet", {
+    amount,
+    autoCashout: auto
   });
-
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message);
-
-  return true;
 }
 
-async function verifyOtpRequest(phone, otp, name = "") {
-  const res = await fetch(API + "/auth/verify-otp", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phone, otp, name })
-  });
+function cashOut() {
+  if (!hasBet) return;
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message);
-
-  return data;
-}
-
-// ================= LOGIN =================
-async function startPhoneLogin() {
-  try {
-    const raw = el("login-phone").value;
-    const phone = formatPhone(raw);
-
-    await sendOtpRequest(phone);
-
-    el("login-otp").style.display = "block";
-    toast("OTP sent");
-
-  } catch (err) {
-    console.error(err);
-    toast(err.message);
+  if (gameState !== "FLYING") {
+    return toast("Too late!");
   }
-}
 
-async function verifyPhoneLogin() {
-  try {
-    const rawPhone = el("login-phone").value;
-    const phone = formatPhone(rawPhone);
-    const otp = el("login-code").value;
-
-    if (!otp) return toast("Enter OTP");
-
-    const data = await verifyOtpRequest(phone, otp);
-
-    token = data.token;
-    localStorage.setItem("av_token", token);
-
-    connectSocket();
-    showLoggedInUI();
-    fetchWallet();
-
-    closeModal("login-modal");
-    toast("Login successful");
-
-  } catch (err) {
-    console.error(err);
-    toast("Invalid OTP");
-  }
-}
-
-// ================= REGISTER =================
-async function startPhoneAuth() {
-  try {
-    const raw = el("reg-phone").value;
-    const phone = formatPhone(raw);
-
-    await sendOtpRequest(phone);
-
-    el("otp-section").style.display = "block";
-    toast("OTP sent");
-
-  } catch (err) {
-    toast(err.message);
-  }
-}
-
-async function completeAuth() {
-  try {
-    const raw = el("reg-phone").value;
-    const phone = formatPhone(raw);
-    const otp = el("otp-code").value;
-    const name = el("reg-name").value;
-
-    if (!otp) return toast("Enter OTP");
-
-    const data = await verifyOtpRequest(phone, otp, name);
-
-    token = data.token;
-    localStorage.setItem("av_token", token);
-
-    connectSocket();
-    showLoggedInUI();
-    fetchWallet();
-
-    closeModal("register-modal");
-    toast("Account created");
-
-  } catch (err) {
-    console.error(err);
-    toast("Signup failed");
-  }
-}
-
-
-function addFeed(d) {
-  const feed = el("feed-list");
-
-  const div = document.createElement("div");
-  div.className = "feed-item";
-
-  div.innerHTML = `
-    <span>👤 ${d.name}</span>
-    <span>BET KES ${d.bet}</span>
-    <span>${d.cashout}x</span>
-    <span>+KES ${d.win}</span>
-  `;
-
-  feed.prepend(div);
-
-  if (feed.children.length > 6) {
-    feed.removeChild(feed.lastChild);
-  }
+  socket.emit("cashout");
 }
 
 // ================= WALLET =================
@@ -228,46 +139,31 @@ async function fetchWallet() {
   if (!token) return;
 
   try {
-    const r = await fetch(API + "/wallet/me", {
+    const res = await fetch(API + "/wallet/me", {
       headers: { Authorization: "Bearer " + token }
     });
 
-    if (r.status === 401) {
-      logout();
-      return;
-    }
+    if (res.status === 401) return logout();
 
-    const d = await r.json();
+    const data = await res.json();
 
-    el("wallet-bal").innerText = "KES " + (d.walletBalance || 0);
-    el("top-bal-val").innerText = "KES " + (d.walletBalance || 0);
+    el("wallet-bal").innerText = "KES " + data.walletBalance;
+    el("top-bal-val").innerText = "KES " + data.walletBalance;
 
-  } catch (e) {
-    console.log(e);
+  } catch (err) {
+    console.log(err);
   }
 }
 
-// ================= PAYMENTS =================
-function openDepositModal() {
-  openModal("deposit-modal");
-}
-
-function openWithdrawModal() {
-  openModal("withdraw-modal");
-}
-
-
+// ================= DEPOSIT =================
 async function doDeposit() {
+
   try {
-    el("deposit-loading").style.display = "block";
-
     const phone = formatPhone(el("dep-phone").value);
-    let amount = Number(el("dep-amount").value);
+    const amount = Number(el("dep-amount").value);
 
-    amount = Math.round(amount); // no decimals
-
-    if (amount < 100 || amount > 100000) {
-      throw new Error("Invalid amount");
+    if (amount < 100) {
+      return toast("Minimum is 100");
     }
 
     const res = await fetch(API + "/payment/stk-push", {
@@ -283,17 +179,16 @@ async function doDeposit() {
 
     if (!res.ok) throw new Error(data.message);
 
-    toast("Check your phone");
+    toast("Check your phone 📲");
 
   } catch (err) {
     toast(err.message);
-  } finally {
-    el("deposit-loading").style.display = "none";
   }
 }
 
-
+// ================= WITHDRAW =================
 async function confirmWithdraw() {
+
   try {
     const amount = Number(el("wth-amount").value);
 
@@ -307,6 +202,7 @@ async function confirmWithdraw() {
     });
 
     const data = await res.json();
+
     if (!res.ok) throw new Error(data.message);
 
     toast("Withdraw successful");
@@ -317,19 +213,97 @@ async function confirmWithdraw() {
   }
 }
 
-// ================= GAME =================
-function startGame() {
-  if (!token) return openModal("login-modal");
+// ================= AUTH =================
+function formatPhone(input) {
+  let phone = input.replace(/\D/g, "");
 
-  socket.emit("place_bet", {
-    amount: Number(el("bet-input").value),
-    autoCashout: Number(el("auto-input").value)
-  });
+  if (phone.startsWith("0")) {
+    phone = "254" + phone.slice(1);
+  }
+
+  return "+" + phone;
 }
 
-function cashOut() {
-  if (!hasBet) return;
-  socket.emit("cashout");
+async function sendOtp(phone) {
+  const res = await fetch(API + "/auth/send-otp", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ phone })
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message);
+}
+
+async function verifyOtp(phone, otp, name="") {
+  const res = await fetch(API + "/auth/verify-otp", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ phone, code: otp, name })
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message);
+
+  return data;
+}
+
+// LOGIN
+async function startPhoneLogin() {
+  const phone = formatPhone(el("login-phone").value);
+  await sendOtp(phone);
+
+  el("login-otp").style.display = "block";
+  toast("OTP sent");
+}
+
+async function verifyPhoneLogin() {
+  try {
+    const phone = formatPhone(el("login-phone").value);
+    const otp = el("login-code").value;
+
+    const data = await verifyOtp(phone, otp);
+
+    token = data.token;
+    localStorage.setItem("av_token", token);
+
+    initLoggedIn();
+
+    closeModal("login-modal");
+    toast("Welcome back");
+
+  } catch {
+    toast("Invalid OTP");
+  }
+}
+
+// REGISTER
+async function startPhoneAuth() {
+  const phone = formatPhone(el("reg-phone").value);
+  await sendOtp(phone);
+
+  el("otp-section").style.display = "block";
+}
+
+async function completeAuth() {
+  try {
+    const phone = formatPhone(el("reg-phone").value);
+    const otp = el("otp-code").value;
+    const name = el("reg-name").value;
+
+    const data = await verifyOtp(phone, otp, name);
+
+    token = data.token;
+    localStorage.setItem("av_token", token);
+
+    initLoggedIn();
+
+    closeModal("register-modal");
+    toast("Account created");
+
+  } catch {
+    toast("Signup failed");
+  }
 }
 
 // ================= UI =================
@@ -349,18 +323,15 @@ function hideCrash() {
 function animatePlane(m) {
   const p = el("plane-el");
 
-  const progress = Math.min(m / 10, 1); // normalize
+  const progress = Math.min(m / 10, 1);
 
-  const x = 10 + (progress * 80); // 10% → 90%
-  const y = 20 + (progress * 150); // safe height
-
-  p.style.left = x + "%";
-  p.style.bottom = y + "px";
+  p.style.left = (10 + progress * 80) + "%";
+  p.style.bottom = (20 + progress * 150) + "px";
 }
 
-// ================= HELPERS =================
 function enableBet() { el("btn-bet").disabled = false; }
 function disableBet() { el("btn-bet").disabled = true; }
+
 function enableCashout() { el("btn-cash").disabled = false; }
 function disableCashout() { el("btn-cash").disabled = true; }
 
@@ -377,23 +348,12 @@ function logout() {
 function openModal(id) { el(id).classList.add("open"); }
 function closeModal(id) { el(id).classList.remove("open"); }
 
-function handleResponsive() {
-  const m = el("mobile-controls");
-  if (m) m.style.display = window.innerWidth < 900 ? "block" : "none";
-}
-
 function toast(m) {
   const t = el("toast");
   t.innerText = m;
   t.className = "show";
-  setTimeout(() => (t.className = ""), 2500);
+  setTimeout(() => t.className = "", 2500);
 }
-
-function setDeposit(amount) {
-  el("dep-amount").value = amount;
-}
-
-window.setDeposit = setDeposit;
 
 // ================= EXPORT =================
 window.startGame = startGame;
@@ -402,14 +362,8 @@ window.startPhoneLogin = startPhoneLogin;
 window.verifyPhoneLogin = verifyPhoneLogin;
 window.startPhoneAuth = startPhoneAuth;
 window.completeAuth = completeAuth;
-window.openModal = openModal;
-window.closeModal = closeModal;
-window.logout = logout;
-window.openDepositModal = openDepositModal;
-window.openWithdrawModal = openWithdrawModal;
 window.doDeposit = doDeposit;
 window.confirmWithdraw = confirmWithdraw;
-
-function setAmount(v) {
-  el("dep-amount").value = v;
-}
+window.logout = logout;
+window.openModal = openModal;
+window.closeModal = closeModal;
