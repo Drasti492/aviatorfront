@@ -9,14 +9,13 @@ let socket;
 let token = localStorage.getItem("av_token");
 
 // Game State
-let gameState = "WAITING"; // WAITING | FLYING | CRASHED
+let gameState = "WAITING";
 let hasBet = false;
 let betAmount = 0;
 let currentMult = 1;
 let crashHistory = [];
 let pollTimer = null;
 let stkReference = null;
-let currentBetId = null;
 let walletBalance = 0;
 
 // Canvas trail
@@ -24,7 +23,7 @@ let trailPoints = [];
 const MAX_TRAIL = 60;
 
 // ================================================================
-// DOM HELPERS
+// DOM HELPER
 // ================================================================
 const el = (id) => document.getElementById(id);
 
@@ -53,12 +52,10 @@ function generateStars() {
     star.className = "star";
     const size = Math.random() * 2 + 0.5;
     star.style.cssText = `
-      width:${size}px; height:${size}px;
-      top:${Math.random() * 100}%;
-      left:${Math.random() * 100}%;
-      --op:${0.3 + Math.random() * 0.5};
-      --dur:${2 + Math.random() * 4}s;
-      animation-delay:${Math.random() * 4}s;
+      width:${size}px;height:${size}px;
+      top:${Math.random()*100}%;left:${Math.random()*100}%;
+      --op:${0.3+Math.random()*0.5};--dur:${2+Math.random()*4}s;
+      animation-delay:${Math.random()*4}s;
     `;
     layer.appendChild(star);
   }
@@ -79,17 +76,13 @@ function initCanvas() {
 }
 
 function drawTrail() {
-  if (!ctx) return;
+  if (!ctx || trailPoints.length < 2) return;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  if (trailPoints.length < 2) return;
-
   ctx.beginPath();
-  ctx.strokeStyle = "rgba(245, 166, 35, 0.4)";
+  ctx.strokeStyle = "rgba(245,166,35,0.45)";
   ctx.lineWidth = 2;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-
   ctx.moveTo(trailPoints[0].x, trailPoints[0].y);
   for (let i = 1; i < trailPoints.length; i++) {
     ctx.globalAlpha = i / trailPoints.length;
@@ -100,24 +93,38 @@ function drawTrail() {
 }
 
 // ================================================================
-// UI STATE
+// UI STATE — KEY FIX: deposit/withdraw buttons controlled here
 // ================================================================
 function showLoggedInUI() {
   el("btn-logout").style.display = "inline-block";
   el("top-balance").style.display = "flex";
-  document.querySelectorAll(".btn-auth").forEach(b => b.style.display = "none");
+  el("btn-signin").style.display = "none";
+  el("btn-signup").style.display = "none";
+
+  // ✅ CRITICAL: Enable wallet buttons on login
+  el("btn-deposit").disabled = false;
+  el("btn-deposit").classList.remove("disabled-btn");
   el("btn-withdraw").disabled = false;
+  el("btn-withdraw").classList.remove("disabled-btn");
+
   el("wallet-sub").innerText = "Available balance";
 }
 
 function showLoggedOutUI() {
   el("btn-logout").style.display = "none";
   el("top-balance").style.display = "none";
-  document.querySelectorAll(".btn-auth").forEach(b => b.style.display = "inline-flex");
+  el("btn-signin").style.display = "inline-flex";
+  el("btn-signup").style.display = "inline-flex";
+
+  // Disable wallet + bet buttons when logged out
   el("btn-deposit").disabled = true;
   el("btn-withdraw").disabled = true;
-  el("wallet-sub").innerText = "Login to see balance";
   el("btn-bet").disabled = true;
+  el("btn-cash").disabled = true;
+
+  el("wallet-sub").innerText = "Login to see balance";
+  el("wallet-bal").innerText = "KES 0";
+  el("top-bal-val").innerText = "KES 0";
 }
 
 // ================================================================
@@ -128,10 +135,11 @@ function initLoggedIn() {
   connectSocket();
   fetchWallet();
   fetchHistory();
+  fetchLeaderboard();
 }
 
 // ================================================================
-// SOCKET CONNECTION
+// SOCKET
 // ================================================================
 function connectSocket() {
   socket = io(SOCKET_URL, {
@@ -142,101 +150,90 @@ function connectSocket() {
   });
 
   socket.on("connect", () => {
-    toast("🟢 Connected to server", "success");
+    toast("🟢 Connected", "success");
   });
 
   socket.on("disconnect", () => {
-    toast("🔴 Connection lost. Reconnecting...", "error");
+    toast("🔴 Reconnecting...", "error");
   });
 
-  // WAITING PHASE
   socket.on("round_waiting", (d) => {
     gameState = "WAITING";
     currentMult = 1;
-
     el("phase-el").innerText = `Next round in ${d.countdown}s`;
     el("mult-el").innerText = "1.00x";
     el("mult-el").classList.remove("danger");
-
-    // Show countdown banner
     el("countdown-banner").style.display = "flex";
     el("cd-num").innerText = d.countdown;
-
     hideCrash();
     renderButtons();
   });
 
-  // ROUND STARTS
   socket.on("round_start", () => {
     gameState = "FLYING";
     currentMult = 1;
     trailPoints = [];
-
     el("countdown-banner").style.display = "none";
     el("phase-el").innerText = "Flying...";
     el("mult-el").classList.remove("danger");
-
-    // Reset plane position
-    const plane = el("plane-el");
-    plane.style.left = "8%";
-    plane.style.bottom = "30px";
-
+    el("plane-el").style.left = "8%";
+    el("plane-el").style.bottom = "30px";
     hideCrash();
     renderButtons();
   });
 
-  // TICK — multiplier update
   socket.on("game_tick", (d) => {
     currentMult = d.multiplier;
     updateMultiplier(currentMult);
     animatePlane(currentMult);
   });
 
-  // CRASH
   socket.on("round_crash", (d) => {
     gameState = "CRASHED";
     hasBet = false;
-
     el("countdown-banner").style.display = "none";
     showCrash(d.crashPoint);
-
-    // Add to crash history
     crashHistory.unshift(d.crashPoint);
     if (crashHistory.length > 5) crashHistory = crashHistory.slice(0, 5);
     renderCrashHistory();
-
     trailPoints = [];
-
     renderButtons();
-    fetchWallet(); // Refresh balance after round
+    fetchWallet();
     fetchHistory();
   });
 
-  // BET PLACED
   socket.on("bet_placed", (d) => {
     hasBet = true;
     betAmount = d.amount;
     toast(`✅ Bet placed — KES ${d.amount}`, "success");
-    el("bet-status").innerText = `KES ${d.amount} staked`;
+    el("bet-status").innerText = `KES ${d.amount} staked • tap Cancel to undo`;
     el("bet-status").className = "bet-status active";
     renderButtons();
   });
 
-  // CASHOUT SUCCESS
+  socket.on("bet_cancelled", (d) => {
+    hasBet = false;
+    betAmount = 0;
+    toast(`↩️ Bet cancelled — KES ${d.amount} refunded`, "info");
+    el("bet-status").innerText = "";
+    el("bet-status").className = "bet-status";
+    fetchWallet();
+    renderButtons();
+  });
+
   socket.on("cashout_success", (d) => {
     hasBet = false;
     toast(`🎉 Won KES ${d.payout} at ${d.multiplier}x!`, "success");
-    el("bet-status").innerText = `Won KES ${d.payout}`;
+    el("bet-status").innerText = `✈️ Won KES ${d.payout} at ${d.multiplier}x`;
     el("bet-status").className = "bet-status active";
     fetchWallet();
     fetchHistory();
     renderButtons();
   });
 
-  // BET LOST
   socket.on("bet_lost", () => {
     if (hasBet) {
-      toast(`❌ Plane crashed! KES ${betAmount} lost`, "error");
+      toast(`💥 Crashed! Lost KES ${betAmount}`, "error");
       el("bet-status").innerText = `Lost KES ${betAmount}`;
       el("bet-status").className = "bet-status";
     }
@@ -245,60 +242,42 @@ function connectSocket() {
     renderButtons();
   });
 
-  // ERROR
   socket.on("error_msg", (msg) => {
     toast("⚠️ " + msg, "error");
   });
 }
 
 // ================================================================
-// MULTIPLIER & PLANE ANIMATION
+// MULTIPLIER & PLANE
 // ================================================================
 function updateMultiplier(v) {
-  const display = el("mult-el");
-  display.innerText = v.toFixed(2) + "x";
-
-  // Color warning at high multipliers
-  if (v >= 5) {
-    display.classList.add("danger");
-  } else {
-    display.classList.remove("danger");
-  }
+  el("mult-el").innerText = v.toFixed(2) + "x";
+  if (v >= 5) el("mult-el").classList.add("danger");
+  else el("mult-el").classList.remove("danger");
 }
 
 function animatePlane(m) {
   const plane = el("plane-el");
   const sky = el("sky");
-
-  const skyW = sky.offsetWidth;
   const skyH = sky.offsetHeight;
-
-  // Smooth curve: x goes right, y goes up exponentially
   const xPct = Math.min(8 + (m - 1) * 6, 82);
   const yPx = Math.min(30 + Math.pow(m - 1, 1.4) * 12, skyH - 60);
-
   plane.style.left = xPct + "%";
   plane.style.bottom = yPx + "px";
 
-  // Trail
   const planeRect = plane.getBoundingClientRect();
   const skyRect = sky.getBoundingClientRect();
-  const px = planeRect.left - skyRect.left + planeRect.width / 2;
-  const py = planeRect.top - skyRect.top + planeRect.height / 2;
-
-  trailPoints.push({ x: px, y: py });
+  trailPoints.push({
+    x: planeRect.left - skyRect.left + planeRect.width / 2,
+    y: planeRect.top - skyRect.top + planeRect.height / 2
+  });
   if (trailPoints.length > MAX_TRAIL) trailPoints.shift();
   drawTrail();
 }
 
-// ================================================================
-// CRASH OVERLAY
-// ================================================================
 function showCrash(p) {
   el("crash-overlay").style.display = "flex";
   el("crash-cs").innerText = `at ${Number(p).toFixed(2)}x`;
-
-  // Move plane offscreen
   el("plane-el").style.left = "110%";
 }
 
@@ -307,13 +286,12 @@ function hideCrash() {
 }
 
 // ================================================================
-// CRASH HISTORY BAR (top)
+// CRASH HISTORY BAR
 // ================================================================
 function renderCrashHistory() {
   const bar = el("crash-bar");
   if (!bar) return;
   bar.innerHTML = "";
-
   crashHistory.forEach(v => {
     const item = document.createElement("div");
     item.className = "crash-item";
@@ -327,7 +305,7 @@ function renderCrashHistory() {
 }
 
 // ================================================================
-// BUTTONS — RENDER STATE MACHINE
+// BUTTONS STATE MACHINE
 // ================================================================
 function renderButtons() {
   const bet = el("btn-bet");
@@ -337,49 +315,63 @@ function renderButtons() {
     bet.disabled = true;
     cash.disabled = true;
     bet.innerText = "Sign in to bet";
+    bet.className = "btn-bet";
+    cash.className = "btn-cash";
     return;
   }
 
   if (gameState === "FLYING") {
-    // Plane is flying
     if (hasBet) {
-      // Has active bet — show cash out (enabled)
+      // Active bet — show pulsing cash out
       bet.disabled = true;
-      bet.innerText = "Bet placed ✓";
+      bet.innerText = "✓ Bet Active";
       bet.className = "btn-bet";
 
       cash.disabled = false;
+      cash.innerText = "💰 Cash Out";
       cash.className = "btn-cash active-bet";
-      cash.innerText = "Cash Out";
     } else {
-      // No bet this round — wait
+      // No bet this round
       bet.disabled = true;
-      bet.innerText = "Wait for next round";
+      bet.innerText = "⏳ Next Round";
       bet.className = "btn-bet waiting-mode";
 
       cash.disabled = true;
-      cash.className = "btn-cash";
       cash.innerText = "Cash Out";
+      cash.className = "btn-cash";
     }
   } else if (gameState === "WAITING") {
-    // Can place bet
-    bet.disabled = false;
-    bet.innerText = hasBet ? "Bet placed ✓" : "Place Bet";
-    bet.className = "btn-bet";
-    bet.disabled = hasBet; // Only one bet per round
+    if (hasBet) {
+      // Bet placed — show Cancel option
+      bet.disabled = false;
+      bet.innerText = "✕ Cancel Bet";
+      bet.className = "btn-bet cancel-mode";
+      bet.onclick = cancelBet;
 
-    cash.disabled = true;
-    cash.className = "btn-cash";
-    cash.innerText = "Cash Out";
+      cash.disabled = true;
+      cash.innerText = "Cash Out";
+      cash.className = "btn-cash";
+    } else {
+      // Ready to bet
+      bet.disabled = false;
+      bet.innerText = "Place Bet";
+      bet.className = "btn-bet";
+      bet.onclick = startGame;
+
+      cash.disabled = true;
+      cash.innerText = "Cash Out";
+      cash.className = "btn-cash";
+    }
   } else {
     // CRASHED
     bet.disabled = true;
     bet.innerText = "Round ended...";
     bet.className = "btn-bet";
+    bet.onclick = startGame;
 
     cash.disabled = true;
-    cash.className = "btn-cash";
     cash.innerText = "Cash Out";
+    cash.className = "btn-cash";
   }
 }
 
@@ -389,20 +381,20 @@ function renderButtons() {
 function startGame() {
   if (!token) return openModal("login-modal");
   if (gameState !== "WAITING") return toast("Wait for the next round!", "info");
-  if (hasBet) return toast("You already placed a bet this round", "info");
+  if (hasBet) return toast("You already have a bet this round", "info");
 
   const amount = Number(el("bet-input").value);
   const autoCashout = Number(el("auto-input").value);
 
-  if (!amount || amount < 30) {
-    return toast("Minimum stake is KES 30", "error");
-  }
-
-  if (amount > walletBalance) {
-    return toast("Insufficient balance. Please deposit.", "error");
-  }
+  if (!amount || amount < 30) return toast("Minimum stake is KES 30", "error");
+  if (amount > walletBalance) return toast("Insufficient balance — please deposit", "error");
 
   socket.emit("place_bet", { amount, autoCashout });
+}
+
+function cancelBet() {
+  if (!hasBet || gameState !== "WAITING") return;
+  socket.emit("cancel_bet");
 }
 
 function cashOut() {
@@ -419,35 +411,29 @@ function setAmount(v) {
 // ================================================================
 async function fetchWallet() {
   if (!token) return;
-
   try {
     const res = await fetch(API + "/wallet/me", {
       headers: { Authorization: "Bearer " + token }
     });
-
     if (res.status === 401) return logout();
-
     const data = await res.json();
     walletBalance = data.walletBalance || 0;
-
     el("wallet-bal").innerText = "KES " + walletBalance.toLocaleString();
     el("top-bal-val").innerText = "KES " + walletBalance.toLocaleString();
   } catch (err) {
-    console.error("Wallet fetch error:", err);
+    console.error("Wallet error:", err);
   }
 }
 
 // ================================================================
-// BET HISTORY
+// HISTORY
 // ================================================================
 async function fetchHistory() {
   if (!token) return;
-
   try {
     const res = await fetch(API + "/bets/my", {
       headers: { Authorization: "Bearer " + token }
     });
-
     const data = await res.json();
     renderHistory(data);
   } catch {}
@@ -455,26 +441,53 @@ async function fetchHistory() {
 
 function renderHistory(list) {
   const wrap = el("history-list");
-
   if (!list || list.length === 0) {
     wrap.innerHTML = '<div class="fi-empty">No bets yet. Place your first bet!</div>';
     return;
   }
-
   wrap.innerHTML = "";
-
   list.slice(0, 10).forEach(item => {
     const div = document.createElement("div");
     const isWin = item.result === "win";
     div.className = "fi " + (isWin ? "win" : "loss");
-
     const icon = isWin ? "🏆" : "💥";
     const payout = isWin ? `+KES ${item.payout}` : `-KES ${item.amount}`;
-
     div.innerHTML = `
-      <span>${icon} ${item.multiplier?.toFixed(2)}x</span>
-      <span>KES ${item.amount}</span>
-      <span>${payout}</span>
+      <span class="fi-icon">${icon}</span>
+      <span class="fi-mult">${Number(item.multiplier).toFixed(2)}x</span>
+      <span class="fi-stake">KES ${item.amount}</span>
+      <span class="fi-result">${payout}</span>
+    `;
+    wrap.appendChild(div);
+  });
+}
+
+// ================================================================
+// LEADERBOARD
+// ================================================================
+async function fetchLeaderboard() {
+  try {
+    const res = await fetch(API + "/stats/leaderboard");
+    const data = await res.json();
+    renderLeaderboard(data);
+  } catch {}
+}
+
+function renderLeaderboard(list) {
+  const wrap = el("leaderboard-list");
+  if (!list || list.length === 0) {
+    wrap.innerHTML = '<div class="fi-empty">No players yet</div>';
+    return;
+  }
+  wrap.innerHTML = "";
+  const medals = ["🥇", "🥈", "🥉"];
+  list.slice(0, 10).forEach((item, i) => {
+    const div = document.createElement("div");
+    div.className = "lb-row";
+    div.innerHTML = `
+      <span class="lb-rank">${medals[i] || (i + 1)}</span>
+      <span class="lb-name">${item.name || "Player"}</span>
+      <span class="lb-bal">KES ${Number(item.walletBalance).toLocaleString()}</span>
     `;
     wrap.appendChild(div);
   });
@@ -485,11 +498,9 @@ function renderHistory(list) {
 // ================================================================
 function openDeposit() {
   if (!token) return openModal("login-modal");
-  openModal("deposit-modal");
-
-  // Pre-fill phone from session if available
   const savedPhone = localStorage.getItem("av_phone");
-  if (savedPhone) el("dep-phone").value = savedPhone;
+  if (savedPhone && el("dep-phone")) el("dep-phone").value = savedPhone;
+  openModal("deposit-modal");
 }
 
 function setDepAmount(v) {
@@ -534,16 +545,12 @@ async function doDeposit() {
     }
 
     stkReference = data.reference;
-
     closeModal("deposit-modal");
     openModal("stk-modal");
-
     el("stk-status").innerHTML = '<span class="pulse-ring"></span> Waiting for M-Pesa payment...';
-
-    // Start polling
     startStkPoll(stkReference);
 
-  } catch (err) {
+  } catch {
     toast("Network error. Try again.", "error");
   } finally {
     btn.disabled = false;
@@ -556,18 +563,15 @@ async function doDeposit() {
 // ================================================================
 function startStkPoll(reference) {
   if (pollTimer) clearInterval(pollTimer);
-
   let attempts = 0;
-  const MAX = 18; // 90 seconds total
+  const MAX = 18;
 
   pollTimer = setInterval(async () => {
     attempts++;
-
     try {
       const res = await fetch(API + "/payment/status/" + reference, {
         headers: { Authorization: "Bearer " + token }
       });
-
       const data = await res.json();
 
       if (data.status === "success") {
@@ -575,21 +579,14 @@ function startStkPoll(reference) {
         el("stk-status").className = "status-pill success";
         el("stk-status").innerText = "✅ Payment received!";
         toast("💰 Deposit successful!", "success");
-
-        setTimeout(() => {
-          closeModal("stk-modal");
-          fetchWallet();
-        }, 1500);
-
+        setTimeout(() => { closeModal("stk-modal"); fetchWallet(); }, 1500);
       } else if (data.status === "failed") {
         clearInterval(pollTimer);
         el("stk-status").className = "status-pill failed";
         el("stk-status").innerText = "❌ Payment failed or cancelled";
         toast("Deposit failed. Try again.", "error");
-
       } else if (attempts >= MAX) {
         clearInterval(pollTimer);
-        el("stk-status").className = "status-pill pending";
         el("stk-status").innerText = "⏱ Timed out — check manually";
       }
     } catch {}
@@ -601,6 +598,8 @@ function startStkPoll(reference) {
 // ================================================================
 function openWithdraw() {
   if (!token) return openModal("login-modal");
+  const savedPhone = localStorage.getItem("av_phone");
+  if (savedPhone && el("wth-phone")) el("wth-phone").value = savedPhone;
   openModal("withdraw-modal");
 }
 
@@ -682,7 +681,6 @@ async function doLogin() {
     token = data.token;
     localStorage.setItem("av_token", token);
     localStorage.setItem("av_phone", rawPhone);
-
     closeModal("login-modal");
     toast("Welcome back! ✈️", "success");
     initLoggedIn();
@@ -698,12 +696,9 @@ async function doLogin() {
 // ================================================================
 // AUTH — REGISTER
 // ================================================================
-let regOtpSent = false;
-
 async function sendRegOtp() {
   const rawPhone = el("reg-phone").value.trim();
   if (!rawPhone) return toast("Enter your phone number first", "error");
-
   const phone = formatPhone(rawPhone);
   if (!phone) return toast("Invalid phone number", "error");
 
@@ -717,7 +712,6 @@ async function sendRegOtp() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone })
     });
-
     const data = await res.json();
 
     if (!res.ok) {
@@ -727,21 +721,15 @@ async function sendRegOtp() {
       return;
     }
 
-    regOtpSent = true;
     el("reg-otp-field").style.display = "flex";
     toast("OTP sent to " + rawPhone, "success");
 
-    // Countdown
     let secs = 60;
     btn.innerText = `Resend (${secs}s)`;
     const timer = setInterval(() => {
       secs--;
       btn.innerText = `Resend (${secs}s)`;
-      if (secs <= 0) {
-        clearInterval(timer);
-        btn.disabled = false;
-        btn.innerText = "Resend OTP";
-      }
+      if (secs <= 0) { clearInterval(timer); btn.disabled = false; btn.innerText = "Resend OTP"; }
     }, 1000);
 
   } catch {
@@ -760,7 +748,7 @@ async function doRegister() {
 
   if (!name) return toast("Enter your name", "error");
   if (!rawPhone) return toast("Enter your phone", "error");
-  if (!otp) return toast("Enter the OTP", "error");
+  if (!otp) return toast("Enter the OTP sent to your phone", "error");
   if (!pin || pin.length !== 4) return toast("PIN must be 4 digits", "error");
   if (pin !== pin2) return toast("PINs do not match", "error");
 
@@ -777,7 +765,6 @@ async function doRegister() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, phone, otp, pin })
     });
-
     const data = await res.json();
 
     if (!res.ok) {
@@ -788,7 +775,6 @@ async function doRegister() {
     token = data.token;
     localStorage.setItem("av_token", token);
     localStorage.setItem("av_phone", rawPhone);
-
     closeModal("register-modal");
     toast("🎉 Welcome! KES 30 bonus added!", "success");
     initLoggedIn();
@@ -804,12 +790,9 @@ async function doRegister() {
 // ================================================================
 // AUTH — RESET PIN
 // ================================================================
-let resetOtpSent = false;
-
 async function sendResetOtp() {
   const rawPhone = el("reset-phone").value.trim();
   if (!rawPhone) return toast("Enter your phone number", "error");
-
   const phone = formatPhone(rawPhone);
   if (!phone) return toast("Invalid phone number", "error");
 
@@ -823,7 +806,6 @@ async function sendResetOtp() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone })
     });
-
     const data = await res.json();
 
     if (!res.ok) {
@@ -833,7 +815,6 @@ async function sendResetOtp() {
       return;
     }
 
-    resetOtpSent = true;
     el("reset-otp-field").style.display = "flex";
     el("reset-pin-field").style.display = "flex";
     el("btn-reset-submit").style.display = "block";
@@ -844,11 +825,7 @@ async function sendResetOtp() {
     const timer = setInterval(() => {
       secs--;
       btn.innerText = `Resend (${secs}s)`;
-      if (secs <= 0) {
-        clearInterval(timer);
-        btn.disabled = false;
-        btn.innerText = "Resend OTP";
-      }
+      if (secs <= 0) { clearInterval(timer); btn.disabled = false; btn.innerText = "Resend OTP"; }
     }, 1000);
 
   } catch {
@@ -867,7 +844,6 @@ async function doResetPin() {
   if (!newPin || newPin.length !== 4) return toast("New PIN must be 4 digits", "error");
 
   const phone = formatPhone(rawPhone);
-
   const btn = el("btn-reset-submit");
   btn.disabled = true;
   btn.innerText = "Resetting...";
@@ -878,7 +854,6 @@ async function doResetPin() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone, otp, newPin })
     });
-
     const data = await res.json();
 
     if (!res.ok) {
@@ -900,12 +875,11 @@ async function doResetPin() {
 // ================================================================
 // UTILS
 // ================================================================
-
-// Format phone → 254XXXXXXXXX
 function formatPhone(raw) {
   let p = raw.replace(/\s+/g, "").replace(/^0/, "254");
   if (p.startsWith("+")) p = p.slice(1);
-  if (!/^254[17]\d{8}$/.test(p)) return null;
+  // Accept Safaricom (2547xx), Airtel (2573x), Telkom (25477x)
+  if (!/^254(7\d{8}|1\d{8})$/.test(p)) return null;
   return p;
 }
 
@@ -921,11 +895,10 @@ let toastTimer = null;
 function toast(msg, type = "info") {
   const t = el("toast");
   if (!t) return;
-
   if (toastTimer) {
     clearTimeout(toastTimer);
     t.classList.remove("show");
-    setTimeout(() => showToast(t, msg, type), 200);
+    setTimeout(() => showToast(t, msg, type), 150);
   } else {
     showToast(t, msg, type);
   }
@@ -935,10 +908,7 @@ function showToast(t, msg, type) {
   t.innerText = msg;
   t.className = type === "success" ? "success" : type === "error" ? "error" : "info";
   t.classList.add("show");
-  toastTimer = setTimeout(() => {
-    t.classList.remove("show");
-    toastTimer = null;
-  }, 3000);
+  toastTimer = setTimeout(() => { t.classList.remove("show"); toastTimer = null; }, 3000);
 }
 
 function openModal(id) {
@@ -956,7 +926,6 @@ function switchModal(from, to) {
   setTimeout(() => openModal(to), 200);
 }
 
-// Close modal on backdrop click
 document.addEventListener("click", (e) => {
   if (e.target.classList.contains("modal-bg")) {
     e.target.classList.remove("open");
@@ -967,6 +936,7 @@ document.addEventListener("click", (e) => {
 // GLOBAL EXPORTS
 // ================================================================
 window.startGame = startGame;
+window.cancelBet = cancelBet;
 window.cashOut = cashOut;
 window.logout = logout;
 window.openModal = openModal;
