@@ -14,7 +14,6 @@
   <!-- TOP BAR -->
   <div class="topbar">
     <div class="logo">AVIA<span>TOR</span></div>
-    <div class="topbar-center" id="crash-bar"></div>
     <div class="topbar-right">
       <div class="balance-chip" id="top-balance" style="display:none">
         <span class="lbl">BAL</span>
@@ -26,13 +25,21 @@
     </div>
   </div>
 
+  <!-- CRASH HISTORY BAR — always above sky, horizontal scroll -->
+  <div class="crash-history-bar" id="crash-bar">
+    <div class="crash-bar-label">Last 5 Rounds:</div>
+    <div class="crash-bar-items" id="crash-bar-items">
+      <div class="crash-empty">No rounds yet</div>
+    </div>
+  </div>
+
   <!-- MAIN GRID -->
   <div class="main">
 
     <!-- LEFT COLUMN -->
     <div class="left">
 
-      <!-- SKY -->
+      <!-- SKY / GAME AREA -->
       <div id="sky">
         <canvas id="trail-cvs"></canvas>
         <div id="stars-layer"></div>
@@ -53,14 +60,6 @@
         </div>
       </div>
 
-      <!-- FLIGHT HISTORY — properly inside left col -->
-      <div class="feed-wrap">
-        <div class="feed-title">🎫 My Flight History</div>
-        <div id="history-list">
-          <div class="fi-empty">No bets yet. Place your first bet!</div>
-        </div>
-      </div>
-
     </div>
 
     <!-- SIDEBAR -->
@@ -72,7 +71,6 @@
         <div class="wallet-bal" id="wallet-bal">KES 0</div>
         <div class="wallet-sub" id="wallet-sub">Login to see balance</div>
         <div class="wallet-btns">
-          <!-- NO disabled attribute here — JS controls this -->
           <button class="w-btn dep" id="btn-deposit" onclick="openDeposit()">⬇ Deposit</button>
           <button class="w-btn wth" id="btn-withdraw" onclick="openWithdraw()">⬆ Withdraw</button>
         </div>
@@ -100,6 +98,14 @@
           <button class="btn-cash" id="btn-cash" onclick="cashOut()" disabled>Cash Out</button>
         </div>
         <div class="bet-status" id="bet-status"></div>
+      </div>
+
+      <!-- FLIGHT HISTORY — below bet buttons as requested -->
+      <div class="card history-card">
+        <div class="card-title">🎫 My Flight History</div>
+        <div id="history-list">
+          <div class="fi-empty">No bets yet. Place your first bet!</div>
+        </div>
       </div>
 
       <!-- LEADERBOARD -->
@@ -258,27 +264,43 @@
     <button class="modal-close" onclick="closeModal('withdraw-modal')">×</button>
     <div class="modal-icon">🏦</div>
     <div class="modal-title">Withdraw</div>
-    <div class="modal-sub">Min KES 500 · Sent to M-Pesa</div>
+    <div class="modal-sub" id="wth-modal-sub">Sent to M-Pesa</div>
     <div class="field">
       <label>M-Pesa Phone</label>
       <input type="tel" id="wth-phone" placeholder="0712345678" maxlength="12">
     </div>
     <div class="field">
       <label>Amount (KES)</label>
-      <input type="number" id="wth-amount" placeholder="500" min="500">
+      <input type="number" id="wth-amount" placeholder="200" min="1" oninput="updateWthSummary()">
     </div>
-    <div class="warning-box">Min withdraw is KES 500. You must have deposited at least once.</div>
+    <div class="wth-summary" id="wth-summary">
+      <div class="wth-row"><span class="lbl">Your balance</span><span class="val" id="wth-s-balance">-</span></div>
+      <div class="wth-row"><span class="lbl">Bonus balance</span><span class="val" id="wth-s-bonus">-</span></div>
+      <div class="wth-row"><span class="lbl">Real money</span><span class="val" id="wth-s-real">-</span></div>
+      <div class="wth-row total"><span class="lbl">Min withdrawal</span><span class="val green" id="wth-s-min">-</span></div>
+    </div>
+    <div class="warning-box" id="wth-warning">⚠️ Loading withdrawal info...</div>
     <button class="btn-full orange" id="btn-wth-submit" onclick="doWithdraw()">Request Withdrawal</button>
   </div>
 </div>
 
-<!-- WITHDRAW PENDING -->
+<!-- WITHDRAW PROCESSING (replaces old pending modal) -->
 <div class="modal-bg" id="wth-pending-modal">
   <div class="modal" style="text-align:center">
     <div class="modal-icon">⏳</div>
-    <div class="modal-title">Withdrawal Pending</div>
-    <div class="stk-msg">Your withdrawal is being processed. Funds will arrive via M-Pesa shortly.</div>
-    <div class="status-pill pending" style="margin-top:16px"><span class="pulse-ring"></span> Processing...</div>
+    <div class="modal-title">Processing Withdrawal</div>
+    <div class="stk-msg">
+      Your withdrawal of <strong id="wth-pending-amount">KES -</strong> is being processed.<br>
+      Funds will be sent to M-Pesa shortly.
+    </div>
+    <div class="status-pill pending" style="margin-top:12px">
+      <span class="pulse-ring"></span> Please wait as we process your request...
+    </div>
+    <div class="pending-info">
+      <div class="pending-row">📋 Saved to pending payments</div>
+      <div class="pending-row">📲 M-Pesa transfer initiated</div>
+      <div class="pending-row">⏱ Usually takes 1–5 minutes</div>
+    </div>
     <button class="btn-full" style="margin-top:14px;background:var(--surface3);color:var(--muted)" onclick="closeModal('wth-pending-modal')">OK, Got it</button>
   </div>
 </div>
