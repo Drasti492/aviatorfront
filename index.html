@@ -25,11 +25,15 @@
     </div>
   </div>
 
-  <!-- CRASH HISTORY BAR — always above sky, horizontal scroll -->
-  <div class="crash-history-bar" id="crash-bar">
-    <div class="crash-bar-label">Last 5 Rounds:</div>
-    <div class="crash-bar-items" id="crash-bar-items">
-      <div class="crash-empty">No rounds yet</div>
+  <!-- CRASH HISTORY BAR — 5 horizontal pills, always visible, global -->
+  <div class="crash-history-bar">
+    <span class="crash-bar-label">Last 5:</span>
+    <div class="crash-bar-pills" id="crash-bar-pills">
+      <div class="crash-pill empty-slot">—</div>
+      <div class="crash-pill empty-slot">—</div>
+      <div class="crash-pill empty-slot">—</div>
+      <div class="crash-pill empty-slot">—</div>
+      <div class="crash-pill empty-slot">—</div>
     </div>
   </div>
 
@@ -39,7 +43,7 @@
     <!-- LEFT COLUMN -->
     <div class="left">
 
-      <!-- SKY / GAME AREA -->
+      <!-- SKY -->
       <div id="sky">
         <canvas id="trail-cvs"></canvas>
         <div id="stars-layer"></div>
@@ -100,7 +104,7 @@
         <div class="bet-status" id="bet-status"></div>
       </div>
 
-      <!-- FLIGHT HISTORY — below bet buttons as requested -->
+      <!-- FLIGHT HISTORY — below bet controls -->
       <div class="card history-card">
         <div class="card-title">🎫 My Flight History</div>
         <div id="history-list">
@@ -264,42 +268,50 @@
     <button class="modal-close" onclick="closeModal('withdraw-modal')">×</button>
     <div class="modal-icon">🏦</div>
     <div class="modal-title">Withdraw</div>
-    <div class="modal-sub" id="wth-modal-sub">Sent to M-Pesa</div>
+    <div class="modal-sub">Funds sent to M-Pesa</div>
     <div class="field">
       <label>M-Pesa Phone</label>
       <input type="tel" id="wth-phone" placeholder="0712345678" maxlength="12">
     </div>
     <div class="field">
       <label>Amount (KES)</label>
-      <input type="number" id="wth-amount" placeholder="200" min="1" oninput="updateWthSummary()">
+      <input type="number" id="wth-amount" placeholder="200" min="1">
     </div>
-    <div class="wth-summary" id="wth-summary">
-      <div class="wth-row"><span class="lbl">Your balance</span><span class="val" id="wth-s-balance">-</span></div>
-      <div class="wth-row"><span class="lbl">Bonus balance</span><span class="val" id="wth-s-bonus">-</span></div>
-      <div class="wth-row"><span class="lbl">Real money</span><span class="val" id="wth-s-real">-</span></div>
-      <div class="wth-row total"><span class="lbl">Min withdrawal</span><span class="val green" id="wth-s-min">-</span></div>
+    <div class="wth-info-box" id="wth-info-box">
+      <div class="wth-info-row">
+        <span>💰 Your balance</span>
+        <span id="wi-balance">KES 0</span>
+      </div>
+      <div class="wth-info-row">
+        <span>🎁 Bonus used</span>
+        <span id="wi-bonus">KES 0</span>
+      </div>
+      <div class="wth-info-row highlight">
+        <span>📋 Min withdrawal</span>
+        <span id="wi-min">KES —</span>
+      </div>
     </div>
-    <div class="warning-box" id="wth-warning">⚠️ Loading withdrawal info...</div>
+    <div class="warning-box" id="wth-warning">⚠️ Min withdrawal depends on balance type.</div>
     <button class="btn-full orange" id="btn-wth-submit" onclick="doWithdraw()">Request Withdrawal</button>
   </div>
 </div>
 
-<!-- WITHDRAW PROCESSING (replaces old pending modal) -->
+<!-- WITHDRAW PENDING -->
 <div class="modal-bg" id="wth-pending-modal">
   <div class="modal" style="text-align:center">
     <div class="modal-icon">⏳</div>
-    <div class="modal-title">Processing Withdrawal</div>
+    <div class="modal-title">Processing</div>
     <div class="stk-msg">
-      Your withdrawal of <strong id="wth-pending-amount">KES -</strong> is being processed.<br>
-      Funds will be sent to M-Pesa shortly.
+      Your withdrawal of <strong id="wth-pending-amount">KES —</strong> is being processed.<br>
+      Funds will arrive via M-Pesa shortly.
     </div>
     <div class="status-pill pending" style="margin-top:12px">
       <span class="pulse-ring"></span> Please wait as we process your request...
     </div>
-    <div class="pending-info">
-      <div class="pending-row">📋 Saved to pending payments</div>
-      <div class="pending-row">📲 M-Pesa transfer initiated</div>
-      <div class="pending-row">⏱ Usually takes 1–5 minutes</div>
+    <div class="pending-steps">
+      <div class="pending-step">📋 Saved to pending payments</div>
+      <div class="pending-step">📲 M-Pesa transfer initiated</div>
+      <div class="pending-step">⏱ Usually takes 1–5 minutes</div>
     </div>
     <button class="btn-full" style="margin-top:14px;background:var(--surface3);color:var(--muted)" onclick="closeModal('wth-pending-modal')">OK, Got it</button>
   </div>

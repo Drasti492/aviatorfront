@@ -13,10 +13,11 @@ let gameState = "WAITING";
 let hasBet = false;
 let betAmount = 0;
 let currentMult = 1;
-let crashHistory = [];
+let crashHistory = [];   // global last-5 from server
 let pollTimer = null;
 let stkReference = null;
 let walletBalance = 0;
+let bonusBalance = 0;    // track bonus vs real money
 
 // Canvas trail
 let trailPoints = [];
@@ -33,11 +34,13 @@ const el = (id) => document.getElementById(id);
 document.addEventListener("DOMContentLoaded", () => {
   generateStars();
   initCanvas();
+  renderCrashHistory(); // show 5 empty slots immediately
 
   if (token) {
     initLoggedIn();
   } else {
     showLoggedOutUI();
+    connectSocketGuest(); // guests still see live game + crash history
   }
 });
 
@@ -93,20 +96,42 @@ function drawTrail() {
 }
 
 // ================================================================
-// UI STATE — KEY FIX: deposit/withdraw buttons controlled here
+// CRASH HISTORY BAR — always 5 pills, horizontal, global
+// ================================================================
+function renderCrashHistory() {
+  const bar = el("crash-bar-pills");
+  if (!bar) return;
+  bar.innerHTML = "";
+
+  for (let i = 0; i < 5; i++) {
+    const pill = document.createElement("div");
+    pill.className = "crash-pill";
+
+    if (i < crashHistory.length) {
+      const val = Number(crashHistory[i]);
+      if (val < 2)      pill.classList.add("low");
+      else if (val < 5) pill.classList.add("mid");
+      else              pill.classList.add("high");
+      pill.innerText = val.toFixed(2) + "x";
+    } else {
+      pill.classList.add("empty-slot");
+      pill.innerText = "—";
+    }
+
+    bar.appendChild(pill);
+  }
+}
+
+// ================================================================
+// UI STATE
 // ================================================================
 function showLoggedInUI() {
   el("btn-logout").style.display = "inline-block";
   el("top-balance").style.display = "flex";
   el("btn-signin").style.display = "none";
   el("btn-signup").style.display = "none";
-
-  // ✅ CRITICAL: Enable wallet buttons on login
   el("btn-deposit").disabled = false;
-  el("btn-deposit").classList.remove("disabled-btn");
   el("btn-withdraw").disabled = false;
-  el("btn-withdraw").classList.remove("disabled-btn");
-
   el("wallet-sub").innerText = "Available balance";
 }
 
@@ -115,16 +140,12 @@ function showLoggedOutUI() {
   el("top-balance").style.display = "none";
   el("btn-signin").style.display = "inline-flex";
   el("btn-signup").style.display = "inline-flex";
-
-  // Disable wallet + bet buttons when logged out
   el("btn-deposit").disabled = true;
   el("btn-withdraw").disabled = true;
   el("btn-bet").disabled = true;
   el("btn-cash").disabled = true;
-
   el("wallet-sub").innerText = "Login to see balance";
   el("wallet-bal").innerText = "KES 0";
-  el("top-bal-val").innerText = "KES 0";
 }
 
 // ================================================================
@@ -139,9 +160,62 @@ function initLoggedIn() {
 }
 
 // ================================================================
-// SOCKET
+// GUEST SOCKET — for logged-out users to see live crashes
+// ================================================================
+function connectSocketGuest() {
+  socket = io(SOCKET_URL, { reconnection: true, reconnectionDelay: 2000 });
+
+  socket.on("crash_history", (d) => {
+    if (d && Array.isArray(d.history)) {
+      crashHistory = d.history;
+      renderCrashHistory();
+    }
+  });
+
+  socket.on("round_crash", (d) => {
+    if (d.history && Array.isArray(d.history)) {
+      crashHistory = d.history;
+    } else {
+      crashHistory.unshift(d.crashPoint);
+      if (crashHistory.length > 5) crashHistory = crashHistory.slice(0, 5);
+    }
+    renderCrashHistory();
+    showCrash(d.crashPoint);
+    setTimeout(() => hideCrash(), 4500);
+  });
+
+  socket.on("game_tick", (d) => {
+    updateMultiplier(d.multiplier);
+    animatePlane(d.multiplier);
+  });
+
+  socket.on("round_start", () => {
+    hideCrash();
+    trailPoints = [];
+    el("plane-el").style.left = "8%";
+    el("plane-el").style.bottom = "30px";
+    el("mult-el").innerText = "1.00x";
+    el("mult-el").classList.remove("danger");
+    el("phase-el").innerText = "Flying...";
+    el("countdown-banner").style.display = "none";
+  });
+
+  socket.on("round_waiting", (d) => {
+    el("countdown-banner").style.display = "flex";
+    el("cd-num").innerText = d.countdown;
+    el("phase-el").innerText = `Next round in ${d.countdown}s`;
+    el("mult-el").innerText = "1.00x";
+    hideCrash();
+  });
+}
+
+// ================================================================
+// AUTHENTICATED SOCKET
 // ================================================================
 function connectSocket() {
+  // If guest socket was open, close it
+  if (socket) { socket.disconnect(); socket = null; }
+
   socket = io(SOCKET_URL, {
     auth: { token },
     reconnection: true,
@@ -155,6 +229,14 @@ function connectSocket() {
 
   socket.on("disconnect", () => {
     toast("🔴 Reconnecting...", "error");
+  });
+
+  // Receive global crash history from server
+  socket.on("crash_history", (d) => {
+    if (d && Array.isArray(d.history)) {
+      crashHistory = d.history;
+      renderCrashHistory();
+    }
   });
 
   socket.on("round_waiting", (d) => {
@@ -193,9 +275,16 @@ function connectSocket() {
     hasBet = false;
     el("countdown-banner").style.display = "none";
     showCrash(d.crashPoint);
-    crashHistory.unshift(d.crashPoint);
-    if (crashHistory.length > 5) crashHistory = crashHistory.slice(0, 5);
+
+    // Server sends authoritative history with every crash
+    if (d.history && Array.isArray(d.history)) {
+      crashHistory = d.history;
+    } else {
+      crashHistory.unshift(d.crashPoint);
+      if (crashHistory.length > 5) crashHistory = crashHistory.slice(0, 5);
+    }
     renderCrashHistory();
+
     trailPoints = [];
     renderButtons();
     fetchWallet();
@@ -206,7 +295,7 @@ function connectSocket() {
     hasBet = true;
     betAmount = d.amount;
     toast(`✅ Bet placed — KES ${d.amount}`, "success");
-    el("bet-status").innerText = `KES ${d.amount} staked • tap Cancel to undo`;
+    el("bet-status").innerText = `KES ${d.amount} staked · tap Cancel to undo`;
     el("bet-status").className = "bet-status active";
     renderButtons();
   });
@@ -214,7 +303,7 @@ function connectSocket() {
   socket.on("bet_cancelled", (d) => {
     hasBet = false;
     betAmount = 0;
-    toast(`↩️ Bet cancelled — KES ${d.amount} refunded`, "info");
+    toast(`↩️ Cancelled — KES ${d.amount} refunded`, "info");
     el("bet-status").innerText = "";
     el("bet-status").className = "bet-status";
     fetchWallet();
@@ -286,25 +375,6 @@ function hideCrash() {
 }
 
 // ================================================================
-// CRASH HISTORY BAR
-// ================================================================
-function renderCrashHistory() {
-  const bar = el("crash-bar");
-  if (!bar) return;
-  bar.innerHTML = "";
-  crashHistory.forEach(v => {
-    const item = document.createElement("div");
-    item.className = "crash-item";
-    const val = Number(v);
-    if (val < 2) item.classList.add("low");
-    else if (val < 5) item.classList.add("mid");
-    else item.classList.add("high");
-    item.innerText = val.toFixed(2) + "x";
-    bar.appendChild(item);
-  });
-}
-
-// ================================================================
 // BUTTONS STATE MACHINE
 // ================================================================
 function renderButtons() {
@@ -322,42 +392,34 @@ function renderButtons() {
 
   if (gameState === "FLYING") {
     if (hasBet) {
-      // Active bet — show pulsing cash out
       bet.disabled = true;
       bet.innerText = "✓ Bet Active";
       bet.className = "btn-bet";
-
       cash.disabled = false;
       cash.innerText = "💰 Cash Out";
       cash.className = "btn-cash active-bet";
     } else {
-      // No bet this round
       bet.disabled = true;
       bet.innerText = "⏳ Next Round";
       bet.className = "btn-bet waiting-mode";
-
       cash.disabled = true;
       cash.innerText = "Cash Out";
       cash.className = "btn-cash";
     }
   } else if (gameState === "WAITING") {
     if (hasBet) {
-      // Bet placed — show Cancel option
       bet.disabled = false;
       bet.innerText = "✕ Cancel Bet";
       bet.className = "btn-bet cancel-mode";
       bet.onclick = cancelBet;
-
       cash.disabled = true;
       cash.innerText = "Cash Out";
       cash.className = "btn-cash";
     } else {
-      // Ready to bet
       bet.disabled = false;
       bet.innerText = "Place Bet";
       bet.className = "btn-bet";
       bet.onclick = startGame;
-
       cash.disabled = true;
       cash.innerText = "Cash Out";
       cash.className = "btn-cash";
@@ -368,7 +430,6 @@ function renderButtons() {
     bet.innerText = "Round ended...";
     bet.className = "btn-bet";
     bet.onclick = startGame;
-
     cash.disabled = true;
     cash.innerText = "Cash Out";
     cash.className = "btn-cash";
@@ -402,9 +463,7 @@ function cashOut() {
   socket.emit("cashout");
 }
 
-function setAmount(v) {
-  el("bet-input").value = v;
-}
+function setAmount(v) { el("bet-input").value = v; }
 
 // ================================================================
 // WALLET
@@ -418,6 +477,7 @@ async function fetchWallet() {
     if (res.status === 401) return logout();
     const data = await res.json();
     walletBalance = data.walletBalance || 0;
+    bonusBalance = data.bonusBalance || 0;
     el("wallet-bal").innerText = "KES " + walletBalance.toLocaleString();
     el("top-bal-val").innerText = "KES " + walletBalance.toLocaleString();
   } catch (err) {
@@ -503,9 +563,7 @@ function openDeposit() {
   openModal("deposit-modal");
 }
 
-function setDepAmount(v) {
-  el("dep-amount").value = v;
-}
+function setDepAmount(v) { el("dep-amount").value = v; }
 
 async function doDeposit() {
   const rawPhone = el("dep-phone").value.trim();
@@ -528,13 +586,9 @@ async function doDeposit() {
   try {
     const res = await fetch(API + "/payment/stk", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + token
-      },
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
       body: JSON.stringify({ phone, amount })
     });
-
     const data = await res.json();
 
     if (!res.ok) {
@@ -594,21 +648,47 @@ function startStkPoll(reference) {
 }
 
 // ================================================================
-// WITHDRAW
+// WITHDRAW — with bonus vs real money logic
 // ================================================================
 function openWithdraw() {
   if (!token) return openModal("login-modal");
+
   const savedPhone = localStorage.getItem("av_phone");
   if (savedPhone && el("wth-phone")) el("wth-phone").value = savedPhone;
+
+  // Determine min withdrawal based on balance type
+  // If user only has bonus money (KES 30 signup), min is 400
+  // If user has deposited real money, min is 200
+  const realMoney = Math.max(0, walletBalance - bonusBalance);
+  const minWithdraw = realMoney > 0 ? 200 : 400;
+
+  // Update info box
+  el("wi-balance").innerText = "KES " + walletBalance.toLocaleString();
+  el("wi-bonus").innerText = "KES " + bonusBalance.toLocaleString();
+  el("wi-min").innerText = "KES " + minWithdraw;
+
+  el("wth-warning").innerText = realMoney > 0
+    ? `⚠️ Min withdrawal is KES 200 (you have real money deposited).`
+    : `⚠️ Min withdrawal is KES 400 when using bonus balance only.`;
+
+  el("wth-amount").placeholder = minWithdraw.toString();
+  el("wth-amount").min = minWithdraw;
+
+  // Store min for validation
+  el("wth-amount").dataset.min = minWithdraw;
+
   openModal("withdraw-modal");
 }
 
 async function doWithdraw() {
   const rawPhone = el("wth-phone").value.trim();
   const amount = Number(el("wth-amount").value);
+  const minWithdraw = Number(el("wth-amount").dataset.min || 500);
 
   if (!rawPhone) return toast("Enter your M-Pesa number", "error");
-  if (!amount || amount < 500) return toast("Minimum withdrawal is KES 500", "error");
+  if (!amount || amount < minWithdraw) {
+    return toast(`Minimum withdrawal is KES ${minWithdraw}`, "error");
+  }
   if (amount > walletBalance) return toast("Insufficient balance", "error");
 
   const phone = formatPhone(rawPhone);
@@ -621,19 +701,18 @@ async function doWithdraw() {
   try {
     const res = await fetch(API + "/wallet/withdraw", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + token
-      },
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
       body: JSON.stringify({ amount, phone })
     });
-
     const data = await res.json();
 
     if (!res.ok) {
       toast(data.message || "Withdrawal failed", "error");
       return;
     }
+
+    // Show pending amount in modal
+    el("wth-pending-amount").innerText = "KES " + amount.toLocaleString();
 
     closeModal("withdraw-modal");
     openModal("wth-pending-modal");
@@ -670,7 +749,6 @@ async function doLogin() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phone, pin })
     });
-
     const data = await res.json();
 
     if (!res.ok) {
@@ -731,7 +809,6 @@ async function sendRegOtp() {
       btn.innerText = `Resend (${secs}s)`;
       if (secs <= 0) { clearInterval(timer); btn.disabled = false; btn.innerText = "Resend OTP"; }
     }, 1000);
-
   } catch {
     toast("Network error", "error");
     btn.disabled = false;
@@ -827,7 +904,6 @@ async function sendResetOtp() {
       btn.innerText = `Resend (${secs}s)`;
       if (secs <= 0) { clearInterval(timer); btn.disabled = false; btn.innerText = "Resend OTP"; }
     }, 1000);
-
   } catch {
     toast("Network error", "error");
     btn.disabled = false;
@@ -878,7 +954,6 @@ async function doResetPin() {
 function formatPhone(raw) {
   let p = raw.replace(/\s+/g, "").replace(/^0/, "254");
   if (p.startsWith("+")) p = p.slice(1);
-  // Accept Safaricom (2547xx), Airtel (2573x), Telkom (25477x)
   if (!/^254(7\d{8}|1\d{8})$/.test(p)) return null;
   return p;
 }
@@ -911,25 +986,12 @@ function showToast(t, msg, type) {
   toastTimer = setTimeout(() => { t.classList.remove("show"); toastTimer = null; }, 3000);
 }
 
-function openModal(id) {
-  const m = el(id);
-  if (m) m.classList.add("open");
-}
-
-function closeModal(id) {
-  const m = el(id);
-  if (m) m.classList.remove("open");
-}
-
-function switchModal(from, to) {
-  closeModal(from);
-  setTimeout(() => openModal(to), 200);
-}
+function openModal(id) { const m = el(id); if (m) m.classList.add("open"); }
+function closeModal(id) { const m = el(id); if (m) m.classList.remove("open"); }
+function switchModal(from, to) { closeModal(from); setTimeout(() => openModal(to), 200); }
 
 document.addEventListener("click", (e) => {
-  if (e.target.classList.contains("modal-bg")) {
-    e.target.classList.remove("open");
-  }
+  if (e.target.classList.contains("modal-bg")) e.target.classList.remove("open");
 });
 
 // ================================================================
