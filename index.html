@@ -25,7 +25,7 @@
     </div>
   </div>
 
-  <!-- CRASH HISTORY BAR — 5 horizontal pills, always visible, global -->
+  <!-- CRASH HISTORY BAR — 5 global horizontal pills -->
   <div class="crash-history-bar">
     <span class="crash-bar-label">Last 5:</span>
     <div class="crash-bar-pills" id="crash-bar-pills">
@@ -42,8 +42,6 @@
 
     <!-- LEFT COLUMN -->
     <div class="left">
-
-      <!-- SKY -->
       <div id="sky">
         <canvas id="trail-cvs"></canvas>
         <div id="stars-layer"></div>
@@ -63,7 +61,6 @@
           </div>
         </div>
       </div>
-
     </div>
 
     <!-- SIDEBAR -->
@@ -93,10 +90,23 @@
           <label>Stake (min KES 30)</label>
           <input type="number" id="bet-input" value="100" min="30" step="10">
         </div>
-        <div class="field">
-          <label>Auto Cashout at</label>
+
+        <!-- AUTO CASHOUT TOGGLE -->
+        <div class="autocash-row">
+          <div class="autocash-toggle-wrap">
+            <span class="autocash-label">Auto Cashout</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="auto-toggle" onchange="toggleAutoCashout(this.checked)">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="autocash-hint" id="autocash-hint">Manual — click Cash Out yourself</div>
+        </div>
+        <div class="field" id="auto-field" style="display:none">
+          <label>Auto Cashout at (multiplier)</label>
           <input type="number" id="auto-input" value="2.00" min="1.1" step="0.1">
         </div>
+
         <div class="btn-row">
           <button class="btn-bet" id="btn-bet" onclick="startGame()" disabled>Place Bet</button>
           <button class="btn-cash" id="btn-cash" onclick="cashOut()" disabled>Cash Out</button>
@@ -104,7 +114,7 @@
         <div class="bet-status" id="bet-status"></div>
       </div>
 
-      <!-- FLIGHT HISTORY — below bet controls -->
+      <!-- FLIGHT HISTORY -->
       <div class="card history-card">
         <div class="card-title">🎫 My Flight History</div>
         <div id="history-list">
@@ -277,19 +287,10 @@
       <label>Amount (KES)</label>
       <input type="number" id="wth-amount" placeholder="200" min="1">
     </div>
-    <div class="wth-info-box" id="wth-info-box">
-      <div class="wth-info-row">
-        <span>💰 Your balance</span>
-        <span id="wi-balance">KES 0</span>
-      </div>
-      <div class="wth-info-row">
-        <span>🎁 Bonus used</span>
-        <span id="wi-bonus">KES 0</span>
-      </div>
-      <div class="wth-info-row highlight">
-        <span>📋 Min withdrawal</span>
-        <span id="wi-min">KES —</span>
-      </div>
+    <div class="wth-info-box">
+      <div class="wth-info-row"><span>💰 Your balance</span><span id="wi-balance">KES 0</span></div>
+      <div class="wth-info-row"><span>🎁 Bonus balance</span><span id="wi-bonus">KES 0</span></div>
+      <div class="wth-info-row highlight"><span>📋 Min withdrawal</span><span id="wi-min">KES —</span></div>
     </div>
     <div class="warning-box" id="wth-warning">⚠️ Min withdrawal depends on balance type.</div>
     <button class="btn-full orange" id="btn-wth-submit" onclick="doWithdraw()">Request Withdrawal</button>
@@ -318,7 +319,6 @@
 </div>
 
 <div id="toast"></div>
-
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script src="./aviator.js"></script>
 </body>
