@@ -47,7 +47,7 @@ html, body {
 
 .topbar-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
-/* ===== CRASH HISTORY BAR — 5 horizontal pills ===== */
+/*  CRASH HISTORY BAR — 5 horizontal pills  */
 .crash-history-bar {
   display: flex;
   align-items: center;

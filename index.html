@@ -25,7 +25,7 @@
     </div>
   </div>
 
-  <!-- CRASH HISTORY BAR — 5 global horizontal pills -->
+  <!-- CRASH HISTORY BAR -->
   <div class="crash-history-bar">
     <span class="crash-bar-label">Last 5:</span>
     <div class="crash-bar-pills" id="crash-bar-pills">
@@ -39,8 +39,6 @@
 
   <!-- MAIN GRID -->
   <div class="main">
-
-    <!-- LEFT COLUMN -->
     <div class="left">
       <div id="sky">
         <canvas id="trail-cvs"></canvas>
@@ -65,8 +63,6 @@
 
     <!-- SIDEBAR -->
     <div class="sidebar">
-
-      <!-- WALLET -->
       <div class="card wallet-card">
         <div class="card-title">💰 My Wallet</div>
         <div class="wallet-bal" id="wallet-bal">KES 0</div>
@@ -77,7 +73,6 @@
         </div>
       </div>
 
-      <!-- BET CONTROLS -->
       <div class="card bet-card">
         <div class="card-title">🎯 Place Bet</div>
         <div class="quick-amounts">
@@ -114,7 +109,6 @@
         <div class="bet-status" id="bet-status"></div>
       </div>
 
-      <!-- FLIGHT HISTORY -->
       <div class="card history-card">
         <div class="card-title">🎫 My Flight History</div>
         <div id="history-list">
@@ -122,36 +116,41 @@
         </div>
       </div>
 
-      <!-- LEADERBOARD -->
       <div class="card leaderboard-card">
         <div class="card-title">🏆 Top Players</div>
         <div id="leaderboard-list">
           <div class="fi-empty">Loading...</div>
         </div>
       </div>
-
     </div>
   </div>
 </div>
 
 <!-- ========== MODALS ========== -->
 
-<!-- LOGIN -->
+<!-- LOGIN MODAL -->
 <div class="modal-bg" id="login-modal">
   <div class="modal">
     <button class="modal-close" onclick="closeModal('login-modal')">×</button>
     <div class="modal-icon">✈️</div>
     <div class="modal-title">Welcome Back</div>
-    <div class="modal-sub">Sign in to your Aviator account</div>
-    <div class="field">
-      <label>Phone Number</label>
-      <input type="tel" id="login-phone" placeholder="0712345678" maxlength="12">
+    <div class="modal-sub">Sign in with your phone number</div>
+
+    <!-- Step 1: Phone -->
+    <div id="login-step-phone">
+      <div class="field">
+        <label>Phone Number</label>
+        <input type="tel" id="login-phone" placeholder="0712345678" maxlength="12">
+      </div>
+      <div class="field">
+        <label>4-Digit PIN</label>
+        <input type="password" id="login-pin" placeholder="••••" maxlength="4" inputmode="numeric">
+      </div>
+      <!-- Hidden div for invisible reCAPTCHA -->
+      <div id="login-recaptcha"></div>
+      <button class="btn-full green" id="btn-login-submit" onclick="doLogin()">Sign In</button>
     </div>
-    <div class="field">
-      <label>4-Digit PIN</label>
-      <input type="password" id="login-pin" placeholder="••••" maxlength="4" inputmode="numeric">
-    </div>
-    <button class="btn-full green" id="btn-login-submit" onclick="doLogin()">Sign In</button>
+
     <div class="modal-switch">
       <a onclick="switchModal('login-modal','register-modal')">No account? Sign Up</a>
       &nbsp;·&nbsp;
@@ -160,73 +159,111 @@
   </div>
 </div>
 
-<!-- REGISTER -->
+<!-- REGISTER MODAL -->
 <div class="modal-bg" id="register-modal">
   <div class="modal">
     <button class="modal-close" onclick="closeModal('register-modal')">×</button>
     <div class="modal-icon">🚀</div>
     <div class="modal-title">Create Account</div>
-    <div class="modal-sub">Join Aviator & get <span class="bonus-tag">KES 30 Bonus!</span></div>
-    <div class="field">
-      <label>Full Name</label>
-      <input type="text" id="reg-name" placeholder="John Doe">
-    </div>
-    <div class="field">
-      <label>Phone Number</label>
-      <div class="input-row">
-        <input type="tel" id="reg-phone" placeholder="0712345678" maxlength="12">
-        <button class="btn-otp" id="btn-reg-otp" onclick="sendRegOtp()">Send OTP</button>
+    <div class="modal-sub">Get <span class="bonus-tag">KES 30 Bonus!</span> on sign up</div>
+
+    <!-- Step 1: Details + Send OTP -->
+    <div id="reg-step-1">
+      <div class="field">
+        <label>Full Name</label>
+        <input type="text" id="reg-name" placeholder="John Doe">
       </div>
+      <div class="field">
+        <label>Phone Number</label>
+        <input type="tel" id="reg-phone" placeholder="0712345678" maxlength="12">
+      </div>
+      <div class="field">
+        <label>Create 4-Digit PIN</label>
+        <input type="password" id="reg-pin" placeholder="••••" maxlength="4" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label>Confirm PIN</label>
+        <input type="password" id="reg-pin2" placeholder="••••" maxlength="4" inputmode="numeric">
+      </div>
+      <!-- Hidden div for invisible reCAPTCHA — Firebase needs this -->
+      <div id="reg-recaptcha"></div>
+      <button class="btn-full green" id="btn-reg-send" onclick="regSendOtp()">
+        Send Verification Code
+      </button>
     </div>
-    <div class="field" id="reg-otp-field" style="display:none">
-      <label>Enter OTP</label>
-      <input type="text" id="reg-otp" placeholder="6-digit OTP" maxlength="6" inputmode="numeric">
+
+    <!-- Step 2: Enter OTP code -->
+    <div id="reg-step-2" style="display:none">
+      <div class="otp-sent-info">
+        <div class="otp-sent-icon">📱</div>
+        <div class="otp-sent-text">
+          Code sent to <strong id="reg-phone-display">your phone</strong><br>
+          <span>via Google Firebase — no spam, just your OTP</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Enter 6-Digit Code</label>
+        <input type="text" id="reg-otp-code" placeholder="123456" maxlength="6" inputmode="numeric">
+      </div>
+      <button class="btn-full green" id="btn-reg-verify" onclick="regVerifyOtp()">
+        Verify & Create Account
+      </button>
+      <button class="btn-ghost" onclick="regGoBack()">← Change number</button>
     </div>
-    <div class="field">
-      <label>Create 4-Digit PIN</label>
-      <input type="password" id="reg-pin" placeholder="••••" maxlength="4" inputmode="numeric">
-    </div>
-    <div class="field">
-      <label>Confirm PIN</label>
-      <input type="password" id="reg-pin2" placeholder="••••" maxlength="4" inputmode="numeric">
-    </div>
-    <button class="btn-full green" id="btn-reg-submit" onclick="doRegister()">Create Account & Claim Bonus</button>
+
     <div class="modal-switch">
       Already have an account? <a onclick="switchModal('register-modal','login-modal')">Sign In</a>
     </div>
   </div>
 </div>
 
-<!-- RESET PIN -->
+<!-- RESET PIN MODAL -->
 <div class="modal-bg" id="reset-modal">
   <div class="modal">
     <button class="modal-close" onclick="closeModal('reset-modal')">×</button>
     <div class="modal-icon">🔐</div>
     <div class="modal-title">Reset PIN</div>
-    <div class="modal-sub">Enter your phone to receive OTP</div>
-    <div class="field">
-      <label>Phone Number</label>
-      <div class="input-row">
+    <div class="modal-sub">Verify your phone to reset PIN</div>
+
+    <!-- Step 1 -->
+    <div id="reset-step-1">
+      <div class="field">
+        <label>Phone Number</label>
         <input type="tel" id="reset-phone" placeholder="0712345678" maxlength="12">
-        <button class="btn-otp" id="btn-reset-otp" onclick="sendResetOtp()">Send OTP</button>
       </div>
+      <div id="reset-recaptcha"></div>
+      <button class="btn-full orange" id="btn-reset-send" onclick="resetSendOtp()">
+        Send Verification Code
+      </button>
     </div>
-    <div class="field" id="reset-otp-field" style="display:none">
-      <label>OTP Code</label>
-      <input type="text" id="reset-otp" placeholder="6-digit OTP" maxlength="6" inputmode="numeric">
+
+    <!-- Step 2 -->
+    <div id="reset-step-2" style="display:none">
+      <div class="otp-sent-info">
+        <div class="otp-sent-icon">📱</div>
+        <div class="otp-sent-text">Code sent to <strong id="reset-phone-display">your phone</strong></div>
+      </div>
+      <div class="field">
+        <label>6-Digit Code</label>
+        <input type="text" id="reset-otp-code" placeholder="123456" maxlength="6" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label>New 4-Digit PIN</label>
+        <input type="password" id="reset-new-pin" placeholder="••••" maxlength="4" inputmode="numeric">
+      </div>
+      <button class="btn-full orange" id="btn-reset-verify" onclick="resetVerifyOtp()">
+        Reset PIN
+      </button>
+      <button class="btn-ghost" onclick="resetGoBack()">← Change number</button>
     </div>
-    <div class="field" id="reset-pin-field" style="display:none">
-      <label>New PIN</label>
-      <input type="password" id="reset-pin" placeholder="••••" maxlength="4" inputmode="numeric">
-    </div>
-    <button class="btn-full orange" id="btn-reset-submit" onclick="doResetPin()" style="display:none">Reset PIN</button>
+
     <div class="modal-switch">
       <a onclick="switchModal('reset-modal','login-modal')">Back to Sign In</a>
     </div>
   </div>
 </div>
 
-<!-- DEPOSIT -->
+<!-- DEPOSIT MODAL -->
 <div class="modal-bg" id="deposit-modal">
   <div class="modal">
     <button class="modal-close" onclick="closeModal('deposit-modal')">×</button>
@@ -272,7 +309,7 @@
   </div>
 </div>
 
-<!-- WITHDRAW -->
+<!-- WITHDRAW MODAL -->
 <div class="modal-bg" id="withdraw-modal">
   <div class="modal">
     <button class="modal-close" onclick="closeModal('withdraw-modal')">×</button>
@@ -319,6 +356,10 @@
 </div>
 
 <div id="toast"></div>
+
+<!-- Firebase SDK v9 compat (works without bundler) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script src="./aviator.js"></script>
 </body>
