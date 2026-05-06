@@ -68,8 +68,8 @@
         <div class="wallet-bal" id="wallet-bal">KES 0</div>
         <div class="wallet-sub" id="wallet-sub">Login to see balance</div>
         <div class="wallet-btns">
-          <button class="w-btn dep" id="btn-deposit" onclick="openDeposit()">⬇ Deposit</button>
-          <button class="w-btn wth" id="btn-withdraw" onclick="openWithdraw()">⬆ Withdraw</button>
+          <button class="w-btn dep" id="btn-deposit" onclick="openDeposit()" disabled>⬇ Deposit</button>
+          <button class="w-btn wth" id="btn-withdraw" onclick="openWithdraw()" disabled>⬆ Withdraw</button>
         </div>
       </div>
 
@@ -136,20 +136,16 @@
     <div class="modal-title">Welcome Back</div>
     <div class="modal-sub">Sign in with your phone number</div>
 
-    <!-- Step 1: Phone -->
-    <div id="login-step-phone">
-      <div class="field">
-        <label>Phone Number</label>
-        <input type="tel" id="login-phone" placeholder="0712345678" maxlength="12">
-      </div>
-      <div class="field">
-        <label>4-Digit PIN</label>
-        <input type="password" id="login-pin" placeholder="••••" maxlength="4" inputmode="numeric">
-      </div>
-      <!-- Hidden div for invisible reCAPTCHA -->
-      <div id="login-recaptcha"></div>
-      <button class="btn-full green" id="btn-login-submit" onclick="doLogin()">Sign In</button>
+    <div class="field">
+      <label>Phone Number</label>
+      <input type="tel" id="login-phone" placeholder="0712345678" maxlength="12">
     </div>
+    <div class="field">
+      <label>4-Digit PIN</label>
+      <input type="password" id="login-pin" placeholder="••••" maxlength="4" inputmode="numeric"
+             onkeydown="if(event.key==='Enter') doLogin()">
+    </div>
+    <button class="btn-full green" id="btn-login-submit" onclick="doLogin()">Sign In</button>
 
     <div class="modal-switch">
       <a onclick="switchModal('login-modal','register-modal')">No account? Sign Up</a>
@@ -167,49 +163,30 @@
     <div class="modal-title">Create Account</div>
     <div class="modal-sub">Get <span class="bonus-tag">KES 30 Bonus!</span> on sign up</div>
 
-    <!-- Step 1: Details + Send OTP -->
-    <div id="reg-step-1">
-      <div class="field">
-        <label>Full Name</label>
-        <input type="text" id="reg-name" placeholder="John Doe">
-      </div>
-      <div class="field">
-        <label>Phone Number</label>
-        <input type="tel" id="reg-phone" placeholder="0712345678" maxlength="12">
-      </div>
-      <div class="field">
-        <label>Create 4-Digit PIN</label>
-        <input type="password" id="reg-pin" placeholder="••••" maxlength="4" inputmode="numeric">
-      </div>
-      <div class="field">
-        <label>Confirm PIN</label>
-        <input type="password" id="reg-pin2" placeholder="••••" maxlength="4" inputmode="numeric">
-      </div>
-      <!-- Hidden div for invisible reCAPTCHA — Firebase needs this -->
-      <div id="reg-recaptcha"></div>
-      <button class="btn-full green" id="btn-reg-send" onclick="regSendOtp()">
-        Send Verification Code
-      </button>
+    <div class="field">
+      <label>Full Name</label>
+      <input type="text" id="reg-name" placeholder="John Doe">
     </div>
-
-    <!-- Step 2: Enter OTP code -->
-    <div id="reg-step-2" style="display:none">
-      <div class="otp-sent-info">
-        <div class="otp-sent-icon">📱</div>
-        <div class="otp-sent-text">
-          Code sent to <strong id="reg-phone-display">your phone</strong><br>
-          <span>via Google Firebase — no spam, just your OTP</span>
-        </div>
-      </div>
-      <div class="field">
-        <label>Enter 6-Digit Code</label>
-        <input type="text" id="reg-otp-code" placeholder="123456" maxlength="6" inputmode="numeric">
-      </div>
-      <button class="btn-full green" id="btn-reg-verify" onclick="regVerifyOtp()">
-        Verify & Create Account
-      </button>
-      <button class="btn-ghost" onclick="regGoBack()">← Change number</button>
+    <div class="field">
+      <label>Phone Number</label>
+      <input type="tel" id="reg-phone" placeholder="0712345678" maxlength="12">
     </div>
+    <div class="field">
+      <label>Confirm Phone Number</label>
+      <input type="tel" id="reg-phone2" placeholder="0712345678" maxlength="12">
+    </div>
+    <div class="field">
+      <label>Create 4-Digit PIN</label>
+      <input type="password" id="reg-pin" placeholder="••••" maxlength="4" inputmode="numeric">
+    </div>
+    <div class="field">
+      <label>Confirm PIN</label>
+      <input type="password" id="reg-pin2" placeholder="••••" maxlength="4" inputmode="numeric"
+             onkeydown="if(event.key==='Enter') doRegister()">
+    </div>
+    <button class="btn-full green" id="btn-reg-submit" onclick="doRegister()">
+      Create Account
+    </button>
 
     <div class="modal-switch">
       Already have an account? <a onclick="switchModal('register-modal','login-modal')">Sign In</a>
@@ -223,39 +200,24 @@
     <button class="modal-close" onclick="closeModal('reset-modal')">×</button>
     <div class="modal-icon">🔐</div>
     <div class="modal-title">Reset PIN</div>
-    <div class="modal-sub">Verify your phone to reset PIN</div>
+    <div class="modal-sub">Enter your phone number and choose a new PIN</div>
 
-    <!-- Step 1 -->
-    <div id="reset-step-1">
-      <div class="field">
-        <label>Phone Number</label>
-        <input type="tel" id="reset-phone" placeholder="0712345678" maxlength="12">
-      </div>
-      <div id="reset-recaptcha"></div>
-      <button class="btn-full orange" id="btn-reset-send" onclick="resetSendOtp()">
-        Send Verification Code
-      </button>
+    <div class="field">
+      <label>Phone Number</label>
+      <input type="tel" id="reset-phone" placeholder="0712345678" maxlength="12">
     </div>
-
-    <!-- Step 2 -->
-    <div id="reset-step-2" style="display:none">
-      <div class="otp-sent-info">
-        <div class="otp-sent-icon">📱</div>
-        <div class="otp-sent-text">Code sent to <strong id="reset-phone-display">your phone</strong></div>
-      </div>
-      <div class="field">
-        <label>6-Digit Code</label>
-        <input type="text" id="reset-otp-code" placeholder="123456" maxlength="6" inputmode="numeric">
-      </div>
-      <div class="field">
-        <label>New 4-Digit PIN</label>
-        <input type="password" id="reset-new-pin" placeholder="••••" maxlength="4" inputmode="numeric">
-      </div>
-      <button class="btn-full orange" id="btn-reset-verify" onclick="resetVerifyOtp()">
-        Reset PIN
-      </button>
-      <button class="btn-ghost" onclick="resetGoBack()">← Change number</button>
+    <div class="field">
+      <label>New 4-Digit PIN</label>
+      <input type="password" id="reset-new-pin" placeholder="••••" maxlength="4" inputmode="numeric">
     </div>
+    <div class="field">
+      <label>Confirm New PIN</label>
+      <input type="password" id="reset-new-pin2" placeholder="••••" maxlength="4" inputmode="numeric"
+             onkeydown="if(event.key==='Enter') doResetPin()">
+    </div>
+    <button class="btn-full orange" id="btn-reset-submit" onclick="doResetPin()">
+      Reset PIN
+    </button>
 
     <div class="modal-switch">
       <a onclick="switchModal('reset-modal','login-modal')">Back to Sign In</a>
@@ -357,9 +319,6 @@
 
 <div id="toast"></div>
 
-<!-- Firebase SDK v9 compat (works without bundler) -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script src="./aviator.js"></script>
 </body>

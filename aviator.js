@@ -53,7 +53,6 @@ function formatPhone(raw) {
 }
 
 function validatePhone(phone) {
-  // phone is already in 254XXXXXXXXX format here
   if (!phone) return false;
   const digits = phone.slice(3); // 9 digits after 254
 
@@ -533,7 +532,7 @@ function setDepAmount(v) { el("dep-amount").value = v; }
 async function doDeposit() {
   const rawPhone = el("dep-phone").value.trim();
   const amount   = Number(el("dep-amount").value);
-  if (!rawPhone)              return toast("Enter your M-Pesa phone number", "error");
+  if (!rawPhone)               return toast("Enter your M-Pesa phone number", "error");
   if (!amount || amount < 100) return toast("Minimum deposit is KES 100", "error");
   const phone = formatPhone(rawPhone);
   if (!phone) return toast("Invalid phone number format", "error");
@@ -615,9 +614,9 @@ async function doWithdraw() {
   const rawPhone    = el("wth-phone").value.trim();
   const amount      = Number(el("wth-amount").value);
   const minWithdraw = Number(el("wth-amount").dataset.min || 500);
-  if (!rawPhone)                   return toast("Enter your M-Pesa number", "error");
+  if (!rawPhone)                       return toast("Enter your M-Pesa number", "error");
   if (!amount || amount < minWithdraw) return toast(`Minimum withdrawal is KES ${minWithdraw}`, "error");
-  if (amount > walletBalance)      return toast("Insufficient balance", "error");
+  if (amount > walletBalance)          return toast("Insufficient balance", "error");
   const phone = formatPhone(rawPhone);
   if (!phone) return toast("Invalid phone number", "error");
 
@@ -643,20 +642,19 @@ async function doWithdraw() {
 // AUTH — REGISTER (no OTP — double phone entry + PIN)
 // ================================================================
 async function doRegister() {
-  const name    = el("reg-name").value.trim();
-  const rawPhone = el("reg-phone").value.trim();
+  const name      = el("reg-name").value.trim();
+  const rawPhone  = el("reg-phone").value.trim();
   const rawPhone2 = el("reg-phone2").value.trim();
-  const pin     = el("reg-pin").value.trim();
-  const pin2    = el("reg-pin2").value.trim();
+  const pin       = el("reg-pin").value.trim();
+  const pin2      = el("reg-pin2").value.trim();
 
-  if (!name || name.length < 2) return toast("Enter your full name", "error");
-  if (!rawPhone)  return toast("Enter your phone number", "error");
-  if (!rawPhone2) return toast("Please confirm your phone number", "error");
+  if (!name || name.length < 2)  return toast("Enter your full name", "error");
+  if (!rawPhone)                 return toast("Enter your phone number", "error");
+  if (!rawPhone2)                return toast("Please confirm your phone number", "error");
 
-  // Strip and compare raw inputs (before formatting) to catch obvious mismatches
   const clean1 = rawPhone.replace(/\s+/g, "");
   const clean2 = rawPhone2.replace(/\s+/g, "");
-  if (clean1 !== clean2) return toast("Phone numbers do not match", "error");
+  if (clean1 !== clean2)         return toast("Phone numbers do not match", "error");
 
   const phone = formatPhone(rawPhone);
   if (!phone) return toast("Enter a valid Kenyan number (07XX or 01XX)", "error");
@@ -665,8 +663,8 @@ async function doRegister() {
     return toast("This number looks invalid. Use your real Safaricom or Airtel number.", "error");
   }
 
-  if (!pin || !pin2) return toast("Enter and confirm your PIN", "error");
-  if (pin !== pin2)  return toast("PINs do not match", "error");
+  if (!pin || !pin2)  return toast("Enter and confirm your PIN", "error");
+  if (pin !== pin2)   return toast("PINs do not match", "error");
 
   const pinErr = validatePin(pin);
   if (pinErr) return toast(pinErr, "error");
@@ -732,12 +730,13 @@ async function doResetPin() {
   const newPin   = el("reset-new-pin").value.trim();
   const newPin2  = el("reset-new-pin2").value.trim();
 
-  if (!rawPhone) return toast("Enter your phone number", "error");
-  if (!newPin)   return toast("Enter your new PIN", "error");
-  if (newPin !== newPin2) return toast("PINs do not match", "error");
+  if (!rawPhone)              return toast("Enter your phone number", "error");
+  if (!newPin)                return toast("Enter your new PIN", "error");
+  if (!newPin2)               return toast("Confirm your new PIN", "error");
+  if (newPin !== newPin2)     return toast("PINs do not match", "error");
 
   const pinErr = validatePin(newPin);
-  if (pinErr)  return toast(pinErr, "error");
+  if (pinErr) return toast(pinErr, "error");
 
   const phone = formatPhone(rawPhone);
   if (!phone) return toast("Invalid phone number", "error");
@@ -754,26 +753,13 @@ async function doResetPin() {
     if (!res.ok) { toast(data.message || "Reset failed", "error"); return; }
     toast("✅ PIN reset! Please sign in.", "success");
     closeModal("reset-modal");
+    // Clear reset fields
+    el("reset-phone").value    = "";
+    el("reset-new-pin").value  = "";
+    el("reset-new-pin2").value = "";
     setTimeout(() => openModal("login-modal"), 300);
   } catch { toast("Network error. Try again.", "error"); }
   finally { btn.disabled = false; btn.innerText = "Reset PIN"; }
-}
-
-// ================================================================
-// PHONE MASKING — confirm field shows asterisks while typing
-// ================================================================
-function maskPhoneConfirm(input) {
-  // We store the real value in a data attribute,
-  // but display asterisks for the last N-3 chars
-  const val = input.value;
-  if (val.length > 3) {
-    const visible = val.slice(0, 3);
-    const masked  = "*".repeat(val.length - 3);
-    // We need the real value for comparison — store it
-    input.dataset.real = val;
-  } else {
-    input.dataset.real = val;
-  }
 }
 
 // ================================================================
@@ -829,4 +815,3 @@ window.doResetPin        = doResetPin;
 window.setAmount         = setAmount;
 window.setDepAmount      = setDepAmount;
 window.toggleAutoCashout = toggleAutoCashout;
-window.maskPhoneConfirm  = maskPhoneConfirm;
