@@ -1,45 +1,21 @@
 // ====================================================
-// AVIATOR — Full Game Logic with Firebase Phone Auth
+// AVIATOR — Game Logic (No OTP / No Firebase)
+// Phone confirmed by double-entry on register only
 // ====================================================
 
-const API = "https://aviator-9raf.onrender.com/api";
+const API        = "https://aviator-9raf.onrender.com/api";
 const SOCKET_URL = "https://aviator-9raf.onrender.com";
-
-// ================================================================
-// FIREBASE CONFIG — replace with your actual values from Firebase Console
-// Project Settings → General → Your apps → Web app → firebaseConfig
-// ================================================================
-const firebaseConfig = {
-  apiKey:            "AIzaSyBb-NBiJNfMjuLUn6IsoAEWiiox0x45xEY",
-  authDomain:        "aviator-78db3.firebaseapp.com",
-  projectId:         "aviator-78db3",
-  storageBucket:     "aviator-78db3.firebasestorage.app",
-  messagingSenderId: "974672784155",
-  appId:             "1:974672784155:web:93ef6e668e0fd069e341be"
-};
-
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-
-// Recaptcha verifiers — one per modal that sends OTP
-let regRecaptcha   = null;
-let resetRecaptcha = null;
-
-// Confirmation results from Firebase (holds the OTP session)
-let regConfirmation   = null;
-let resetConfirmation = null;
 
 // Game state
 let socket;
-let token = localStorage.getItem("av_token");
-let gameState    = "WAITING";
-let hasBet       = false;
-let betAmount    = 0;
-let currentMult  = 1;
-let crashHistory = [];
-let pollTimer    = null;
-let stkReference = null;
+let token         = localStorage.getItem("av_token");
+let gameState     = "WAITING";
+let hasBet        = false;
+let betAmount     = 0;
+let currentMult   = 1;
+let crashHistory  = [];
+let pollTimer     = null;
+let stkReference  = null;
 let walletBalance = 0;
 let bonusBalance  = 0;
 let autoCashoutEnabled = false;
@@ -57,7 +33,6 @@ document.addEventListener("DOMContentLoaded", () => {
   generateStars();
   initCanvas();
   renderCrashHistory();
-  initRecaptchas();
 
   if (token) {
     initLoggedIn();
@@ -68,31 +43,62 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // ================================================================
-// FIREBASE RECAPTCHA SETUP
-// Invisible reCAPTCHA — user sees nothing, Firebase verifies silently
+// PHONE VALIDATION — mirrors server-side logic
 // ================================================================
-function initRecaptchas() {
-  // Register modal reCAPTCHA
-  try {
-    regRecaptcha = new firebase.auth.RecaptchaVerifier("reg-recaptcha", {
-      size: "invisible",
-      callback: () => {} // solved silently
-    });
-    regRecaptcha.render();
-  } catch (e) {
-    console.warn("reg recaptcha init:", e.message);
-  }
+function formatPhone(raw) {
+  let p = raw.replace(/\s+/g, "").replace(/^0/, "254");
+  if (p.startsWith("+")) p = p.slice(1);
+  if (!/^254(7\d{8}|1\d{8})$/.test(p)) return null;
+  return p;
+}
 
-  // Reset PIN modal reCAPTCHA
-  try {
-    resetRecaptcha = new firebase.auth.RecaptchaVerifier("reset-recaptcha", {
-      size: "invisible",
-      callback: () => {}
-    });
-    resetRecaptcha.render();
-  } catch (e) {
-    console.warn("reset recaptcha init:", e.message);
+function validatePhone(phone) {
+  // phone is already in 254XXXXXXXXX format here
+  if (!phone) return false;
+  const digits = phone.slice(3); // 9 digits after 254
+
+  // all same digit
+  if (/^(\d)\1{8}$/.test(digits)) return false;
+
+  // sequential ascending or descending
+  let asc = true, desc = true;
+  for (let i = 1; i < digits.length; i++) {
+    if (Number(digits[i]) !== Number(digits[i-1]) + 1) asc  = false;
+    if (Number(digits[i]) !== Number(digits[i-1]) - 1) desc = false;
   }
+  if (asc || desc) return false;
+
+  // known spammy patterns
+  const known = [
+    "700000000","700000001","711111111","722222222","733333333",
+    "744444444","755555555","766666666","777777777","788888888",
+    "799999999","712345678","723456789","798765432","787654321",
+    "710000000","720000000","730000000","740000000","750000000",
+    "760000000","770000000","780000000","790000000","100000000",
+    "110000000","700123456","712300000","700111222"
+  ];
+  if (known.includes(digits)) return false;
+
+  // 6+ consecutive same digits
+  if (/(\d)\1{5,}/.test(digits)) return false;
+
+  // first 5 same
+  if (/^(\d)\1{4}/.test(digits)) return false;
+
+  return true;
+}
+
+function validatePin(pin) {
+  if (!/^\d{4}$/.test(pin)) return "PIN must be exactly 4 digits";
+  if (/^(\d)\1{3}$/.test(pin)) return "Avoid repeated digits like 1111";
+  const d = pin.split("").map(Number);
+  let asc = true, desc = true;
+  for (let i = 1; i < 4; i++) {
+    if (d[i] !== d[i-1]+1) asc  = false;
+    if (d[i] !== d[i-1]-1) desc = false;
+  }
+  if (asc || desc) return "Avoid sequences like 1234 or 9876";
+  return null; // valid
 }
 
 // ================================================================
@@ -104,12 +110,12 @@ function toggleAutoCashout(enabled) {
   const hint  = el("autocash-hint");
   if (enabled) {
     field.style.display = "flex";
-    hint.innerText = "Auto — cashes out at your target multiplier";
-    hint.style.color = "var(--green)";
+    hint.innerText      = "Auto — cashes out at your target multiplier";
+    hint.style.color    = "var(--green)";
   } else {
     field.style.display = "none";
-    hint.innerText = "Manual — click Cash Out yourself";
-    hint.style.color = "var(--muted)";
+    hint.innerText      = "Manual — click Cash Out yourself";
+    hint.style.color    = "var(--muted)";
   }
 }
 
@@ -120,16 +126,16 @@ function generateStars() {
   const layer = el("stars-layer");
   if (!layer) return;
   for (let i = 0; i < 60; i++) {
-    const star = document.createElement("div");
-    star.className = "star";
+    const s = document.createElement("div");
+    s.className = "star";
     const size = Math.random() * 2 + 0.5;
-    star.style.cssText = `
+    s.style.cssText = `
       width:${size}px;height:${size}px;
       top:${Math.random()*100}%;left:${Math.random()*100}%;
       --op:${0.3+Math.random()*0.5};--dur:${2+Math.random()*4}s;
       animation-delay:${Math.random()*4}s;
     `;
-    layer.appendChild(star);
+    layer.appendChild(s);
   }
 }
 
@@ -163,7 +169,7 @@ function drawTrail() {
 }
 
 // ================================================================
-// CRASH HISTORY — 5 horizontal pills
+// CRASH HISTORY
 // ================================================================
 function renderCrashHistory() {
   const bar = el("crash-bar-pills");
@@ -194,7 +200,7 @@ function showLoggedInUI() {
   el("btn-signup").style.display  = "none";
   el("btn-deposit").disabled  = false;
   el("btn-withdraw").disabled = false;
-  el("wallet-sub").innerText = "Available balance";
+  el("wallet-sub").innerText  = "Available balance";
 }
 
 function showLoggedOutUI() {
@@ -206,8 +212,8 @@ function showLoggedOutUI() {
   el("btn-withdraw").disabled = true;
   el("btn-bet").disabled  = true;
   el("btn-cash").disabled = true;
-  el("wallet-sub").innerText  = "Login to see balance";
-  el("wallet-bal").innerText  = "KES 0";
+  el("wallet-sub").innerText = "Login to see balance";
+  el("wallet-bal").innerText = "KES 0";
 }
 
 function initLoggedIn() {
@@ -233,8 +239,8 @@ function connectSocketGuest() {
     showCrash(d.crashPoint);
     setTimeout(() => hideCrash(), 4500);
   });
-  socket.on("game_tick",    (d) => { updateMultiplier(d.multiplier); animatePlane(d.multiplier); });
-  socket.on("round_start",  () => {
+  socket.on("game_tick",   (d) => { updateMultiplier(d.multiplier); animatePlane(d.multiplier); });
+  socket.on("round_start", () => {
     hideCrash(); trailPoints = [];
     el("plane-el").style.left   = "8%";
     el("plane-el").style.bottom = "30px";
@@ -245,9 +251,9 @@ function connectSocketGuest() {
   });
   socket.on("round_waiting", (d) => {
     el("countdown-banner").style.display = "flex";
-    el("cd-num").innerText    = d.countdown;
-    el("phase-el").innerText  = `Next round in ${d.countdown}s`;
-    el("mult-el").innerText   = "1.00x";
+    el("cd-num").innerText   = d.countdown;
+    el("phase-el").innerText = `Next round in ${d.countdown}s`;
+    el("mult-el").innerText  = "1.00x";
     hideCrash();
   });
 }
@@ -310,10 +316,10 @@ function connectSocket() {
 
   socket.on("bet_placed", (d) => {
     hasBet = true; betAmount = d.amount;
-    const mode = autoCashoutEnabled ? `Auto at ${el("auto-input").value}x` : "Manual cashout";
+    const mode = autoCashoutEnabled ? `Auto at ${el("auto-input").value}x` : "Manual";
     toast(`✅ Bet placed — KES ${d.amount}`, "success");
-    el("bet-status").innerText   = `KES ${d.amount} staked · ${mode}`;
-    el("bet-status").className   = "bet-status active";
+    el("bet-status").innerText = `KES ${d.amount} staked · ${mode}`;
+    el("bet-status").className = "bet-status active";
     renderButtons();
   });
 
@@ -334,11 +340,9 @@ function connectSocket() {
   });
 
   socket.on("bet_lost", () => {
-    if (hasBet) {
-      toast(`💥 Crashed! Lost KES ${betAmount}`, "error");
-      el("bet-status").innerText = `Lost KES ${betAmount}`;
-      el("bet-status").className = "bet-status";
-    }
+    if (hasBet) toast(`💥 Crashed! Lost KES ${betAmount}`, "error");
+    el("bet-status").innerText = hasBet ? `Lost KES ${betAmount}` : "";
+    el("bet-status").className = "bet-status";
     hasBet = false; betAmount = 0; renderButtons();
   });
 
@@ -383,8 +387,7 @@ function renderButtons() {
 
   if (!token) {
     bet.disabled  = true; cash.disabled = true;
-    bet.innerText = "Sign in to bet";
-    bet.className = "btn-bet"; cash.className = "btn-cash";
+    bet.innerText = "Sign in to bet"; bet.className = "btn-bet";
     return;
   }
 
@@ -392,13 +395,9 @@ function renderButtons() {
     if (hasBet) {
       bet.disabled  = true; bet.innerText = "✓ Bet Active"; bet.className = "btn-bet";
       if (autoCashoutEnabled) {
-        cash.disabled  = true;
-        cash.innerText = "⚡ Auto Cashing Out...";
-        cash.className = "btn-cash active-bet";
+        cash.disabled = true; cash.innerText = "⚡ Auto Cashing..."; cash.className = "btn-cash active-bet";
       } else {
-        cash.disabled  = false;
-        cash.innerText = "💰 Cash Out";
-        cash.className = "btn-cash active-bet";
+        cash.disabled = false; cash.innerText = "💰 Cash Out"; cash.className = "btn-cash active-bet";
       }
     } else {
       bet.disabled  = true; bet.innerText = "⏳ Next Round"; bet.className = "btn-bet waiting-mode";
@@ -406,12 +405,12 @@ function renderButtons() {
     }
   } else if (gameState === "WAITING") {
     if (hasBet) {
-      bet.disabled  = false; bet.innerText = "✕ Cancel Bet"; bet.className = "btn-bet cancel-mode";
-      bet.onclick   = cancelBet;
+      bet.disabled = false; bet.innerText = "✕ Cancel Bet"; bet.className = "btn-bet cancel-mode";
+      bet.onclick  = cancelBet;
       cash.disabled = true; cash.innerText = "Cash Out"; cash.className = "btn-cash";
     } else {
-      bet.disabled  = false; bet.innerText = "Place Bet"; bet.className = "btn-bet";
-      bet.onclick   = startGame;
+      bet.disabled = false; bet.innerText = "Place Bet"; bet.className = "btn-bet";
+      bet.onclick  = startGame;
       cash.disabled = true; cash.innerText = "Cash Out"; cash.className = "btn-cash";
     }
   } else {
@@ -425,15 +424,15 @@ function renderButtons() {
 // GAME ACTIONS
 // ================================================================
 function startGame() {
-  if (!token)               return openModal("login-modal");
+  if (!token)                  return openModal("login-modal");
   if (gameState !== "WAITING") return toast("Wait for the next round!", "info");
-  if (hasBet)               return toast("You already have a bet this round", "info");
+  if (hasBet)                  return toast("You already have a bet this round", "info");
 
-  const amount     = Number(el("bet-input").value);
+  const amount      = Number(el("bet-input").value);
   const autoCashout = autoCashoutEnabled ? Number(el("auto-input").value) : 0;
 
-  if (!amount || amount < 30)   return toast("Minimum stake is KES 30", "error");
-  if (amount > walletBalance)   return toast("Insufficient balance — please deposit", "error");
+  if (!amount || amount < 30)  return toast("Minimum stake is KES 30", "error");
+  if (amount > walletBalance)  return toast("Insufficient balance — please deposit", "error");
 
   socket.emit("place_bet", { amount, autoCashout });
 }
@@ -481,7 +480,9 @@ async function fetchHistory() {
 
 function renderHistory(list) {
   const wrap = el("history-list");
-  if (!list || list.length === 0) { wrap.innerHTML = '<div class="fi-empty">No bets yet. Place your first bet!</div>'; return; }
+  if (!list || list.length === 0) {
+    wrap.innerHTML = '<div class="fi-empty">No bets yet. Place your first bet!</div>'; return;
+  }
   wrap.innerHTML = "";
   list.slice(0, 10).forEach(item => {
     const div   = document.createElement("div");
@@ -507,7 +508,7 @@ async function fetchLeaderboard() {
     const wrap = el("leaderboard-list");
     if (!data || data.length === 0) { wrap.innerHTML = '<div class="fi-empty">No players yet</div>'; return; }
     wrap.innerHTML = "";
-    ["🥇","🥈","🥉"].concat([4,5,6,7,8,9,10]).forEach((medal, i) => {
+    ["🥇","🥈","🥉",4,5,6,7,8,9,10].forEach((medal, i) => {
       if (!data[i]) return;
       const div = document.createElement("div");
       div.className = "lb-row";
@@ -532,7 +533,7 @@ function setDepAmount(v) { el("dep-amount").value = v; }
 async function doDeposit() {
   const rawPhone = el("dep-phone").value.trim();
   const amount   = Number(el("dep-amount").value);
-  if (!rawPhone)            return toast("Enter your M-Pesa phone number", "error");
+  if (!rawPhone)              return toast("Enter your M-Pesa phone number", "error");
   if (!amount || amount < 100) return toast("Minimum deposit is KES 100", "error");
   const phone = formatPhone(rawPhone);
   if (!phone) return toast("Invalid phone number format", "error");
@@ -598,25 +599,25 @@ function openWithdraw() {
   if (!token) return openModal("login-modal");
   const saved = localStorage.getItem("av_phone");
   if (saved && el("wth-phone")) el("wth-phone").value = saved;
-  const realMoney    = Math.max(0, walletBalance - bonusBalance);
-  const minWithdraw  = realMoney > 0 ? 200 : 400;
+  const realMoney   = Math.max(0, walletBalance - bonusBalance);
+  const minWithdraw = realMoney > 0 ? 200 : 400;
   el("wi-balance").innerText = "KES " + walletBalance.toLocaleString();
   el("wi-bonus").innerText   = "KES " + bonusBalance.toLocaleString();
   el("wi-min").innerText     = "KES " + minWithdraw;
   el("wth-warning").innerText = realMoney > 0
-    ? `⚠️ Min withdrawal is KES 200 (you have real deposited money).`
-    : `⚠️ Min withdrawal is KES 400 when using bonus balance only.`;
+    ? "⚠️ Min withdrawal is KES 200 (you have real deposited money)."
+    : "⚠️ Min withdrawal is KES 400 when using bonus balance only.";
   el("wth-amount").dataset.min = minWithdraw;
   openModal("withdraw-modal");
 }
 
 async function doWithdraw() {
-  const rawPhone   = el("wth-phone").value.trim();
-  const amount     = Number(el("wth-amount").value);
+  const rawPhone    = el("wth-phone").value.trim();
+  const amount      = Number(el("wth-amount").value);
   const minWithdraw = Number(el("wth-amount").dataset.min || 500);
-  if (!rawPhone)                  return toast("Enter your M-Pesa number", "error");
+  if (!rawPhone)                   return toast("Enter your M-Pesa number", "error");
   if (!amount || amount < minWithdraw) return toast(`Minimum withdrawal is KES ${minWithdraw}`, "error");
-  if (amount > walletBalance)     return toast("Insufficient balance", "error");
+  if (amount > walletBalance)      return toast("Insufficient balance", "error");
   const phone = formatPhone(rawPhone);
   if (!phone) return toast("Invalid phone number", "error");
 
@@ -639,13 +640,67 @@ async function doWithdraw() {
 }
 
 // ================================================================
-// AUTH — LOGIN (phone + PIN, no OTP needed for login)
+// AUTH — REGISTER (no OTP — double phone entry + PIN)
+// ================================================================
+async function doRegister() {
+  const name    = el("reg-name").value.trim();
+  const rawPhone = el("reg-phone").value.trim();
+  const rawPhone2 = el("reg-phone2").value.trim();
+  const pin     = el("reg-pin").value.trim();
+  const pin2    = el("reg-pin2").value.trim();
+
+  if (!name || name.length < 2) return toast("Enter your full name", "error");
+  if (!rawPhone)  return toast("Enter your phone number", "error");
+  if (!rawPhone2) return toast("Please confirm your phone number", "error");
+
+  // Strip and compare raw inputs (before formatting) to catch obvious mismatches
+  const clean1 = rawPhone.replace(/\s+/g, "");
+  const clean2 = rawPhone2.replace(/\s+/g, "");
+  if (clean1 !== clean2) return toast("Phone numbers do not match", "error");
+
+  const phone = formatPhone(rawPhone);
+  if (!phone) return toast("Enter a valid Kenyan number (07XX or 01XX)", "error");
+
+  if (!validatePhone(phone)) {
+    return toast("This number looks invalid. Use your real Safaricom or Airtel number.", "error");
+  }
+
+  if (!pin || !pin2) return toast("Enter and confirm your PIN", "error");
+  if (pin !== pin2)  return toast("PINs do not match", "error");
+
+  const pinErr = validatePin(pin);
+  if (pinErr) return toast(pinErr, "error");
+
+  const btn = el("btn-reg-submit");
+  btn.disabled = true; btn.innerText = "Creating account...";
+
+  try {
+    const res  = await fetch(API + "/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone, name, pin })
+    });
+    const data = await res.json();
+    if (!res.ok) { toast(data.message || "Registration failed", "error"); return; }
+
+    token = data.token;
+    localStorage.setItem("av_token", token);
+    localStorage.setItem("av_phone", rawPhone);
+    closeModal("register-modal");
+    toast("🎉 Welcome! KES 30 bonus added!", "success");
+    initLoggedIn();
+  } catch { toast("Network error. Try again.", "error"); }
+  finally { btn.disabled = false; btn.innerText = "Create Account"; }
+}
+
+// ================================================================
+// AUTH — LOGIN
 // ================================================================
 async function doLogin() {
   const rawPhone = el("login-phone").value.trim();
   const pin      = el("login-pin").value.trim();
-  if (!rawPhone || !pin)    return toast("Fill in all fields", "error");
-  if (pin.length !== 4)     return toast("PIN must be 4 digits", "error");
+  if (!rawPhone || !pin) return toast("Fill in all fields", "error");
+  if (pin.length !== 4)  return toast("PIN must be 4 digits", "error");
   const phone = formatPhone(rawPhone);
   if (!phone) return toast("Invalid phone number", "error");
 
@@ -670,204 +725,63 @@ async function doLogin() {
 }
 
 // ================================================================
-// AUTH — REGISTER STEP 1: Send Firebase OTP
+// AUTH — RESET PIN (no OTP — just phone + new PIN)
 // ================================================================
-async function regSendOtp() {
-  const name   = el("reg-name").value.trim();
-  const rawPhone = el("reg-phone").value.trim();
-  const pin    = el("reg-pin").value.trim();
-  const pin2   = el("reg-pin2").value.trim();
-
-  if (!name)                    return toast("Enter your name", "error");
-  if (!rawPhone)                return toast("Enter your phone number", "error");
-  if (!pin || pin.length !== 4) return toast("PIN must be 4 digits", "error");
-  if (pin !== pin2)             return toast("PINs do not match", "error");
-
-  const phone = formatPhone(rawPhone);
-  if (!phone) return toast("Invalid phone number — use 07xx or 01xx format", "error");
-
-  const btn = el("btn-reg-send");
-  btn.disabled = true; btn.innerText = "⏳ Sending...";
-
-  try {
-    // Firebase sends OTP via their own network — no blacklist issues
-    regConfirmation = await auth.signInWithPhoneNumber("+" + phone, regRecaptcha);
-
-    // Show OTP input step
-    el("reg-step-1").style.display        = "none";
-    el("reg-step-2").style.display        = "block";
-    el("reg-phone-display").innerText     = rawPhone;
-    toast("✅ Code sent to " + rawPhone, "success");
-
-  } catch (err) {
-    console.error("Firebase OTP error:", err);
-    // Reset reCAPTCHA on error so user can retry
-    if (regRecaptcha) { regRecaptcha.clear(); initRecaptchas(); }
-    toast(firebaseErrMsg(err), "error");
-    btn.disabled = false; btn.innerText = "Send Verification Code";
-  }
-}
-
-// ================================================================
-// AUTH — REGISTER STEP 2: Verify Firebase OTP + create account
-// ================================================================
-async function regVerifyOtp() {
-  const code     = el("reg-otp-code").value.trim();
-  const name     = el("reg-name").value.trim();
-  const rawPhone = el("reg-phone").value.trim();
-  const pin      = el("reg-pin").value.trim();
-
-  if (!code || code.length !== 6) return toast("Enter the 6-digit code", "error");
-  if (!regConfirmation)           return toast("Please request a code first", "error");
-
-  const btn = el("btn-reg-verify");
-  btn.disabled = true; btn.innerText = "Verifying...";
-
-  try {
-    // Confirm the OTP with Firebase
-    const result = await regConfirmation.confirm(code);
-
-    // Get the ID token — this is what backend verifies
-    const idToken = await result.user.getIdToken();
-    const phone   = formatPhone(rawPhone);
-
-    // Register on our backend
-    const res  = await fetch(API + "/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone, name, pin, firebaseIdToken: idToken })
-    });
-    const data = await res.json();
-
-    if (!res.ok) { toast(data.message || "Registration failed", "error"); return; }
-
-    token = data.token;
-    localStorage.setItem("av_token", token);
-    localStorage.setItem("av_phone", rawPhone);
-    closeModal("register-modal");
-    toast("🎉 Welcome! KES 30 bonus added!", "success");
-    initLoggedIn();
-
-  } catch (err) {
-    console.error("Verify error:", err);
-    toast(firebaseErrMsg(err), "error");
-  } finally {
-    btn.disabled = false; btn.innerText = "Verify & Create Account";
-  }
-}
-
-function regGoBack() {
-  el("reg-step-1").style.display = "block";
-  el("reg-step-2").style.display = "none";
-  el("reg-otp-code").value       = "";
-  regConfirmation = null;
-  if (regRecaptcha) { regRecaptcha.clear(); initRecaptchas(); }
-}
-
-// ================================================================
-// AUTH — RESET PIN STEP 1: Send Firebase OTP
-// ================================================================
-async function resetSendOtp() {
+async function doResetPin() {
   const rawPhone = el("reset-phone").value.trim();
-  if (!rawPhone) return toast("Enter your phone number", "error");
-  const phone = formatPhone(rawPhone);
-  if (!phone)   return toast("Invalid phone number", "error");
-
-  const btn = el("btn-reset-send");
-  btn.disabled = true; btn.innerText = "⏳ Sending...";
-
-  try {
-    resetConfirmation = await auth.signInWithPhoneNumber("+" + phone, resetRecaptcha);
-    el("reset-step-1").style.display       = "none";
-    el("reset-step-2").style.display       = "block";
-    el("reset-phone-display").innerText    = rawPhone;
-    toast("✅ Code sent to " + rawPhone, "success");
-  } catch (err) {
-    console.error("Reset OTP error:", err);
-    if (resetRecaptcha) { resetRecaptcha.clear(); initRecaptchas(); }
-    toast(firebaseErrMsg(err), "error");
-    btn.disabled = false; btn.innerText = "Send Verification Code";
-  }
-}
-
-// ================================================================
-// AUTH — RESET PIN STEP 2: Verify + update PIN
-// ================================================================
-async function resetVerifyOtp() {
-  const code     = el("reset-otp-code").value.trim();
   const newPin   = el("reset-new-pin").value.trim();
-  const rawPhone = el("reset-phone").value.trim();
+  const newPin2  = el("reset-new-pin2").value.trim();
 
-  if (!code || code.length !== 6)    return toast("Enter the 6-digit code", "error");
-  if (!newPin || newPin.length !== 4) return toast("New PIN must be 4 digits", "error");
-  if (!resetConfirmation)            return toast("Please request a code first", "error");
+  if (!rawPhone) return toast("Enter your phone number", "error");
+  if (!newPin)   return toast("Enter your new PIN", "error");
+  if (newPin !== newPin2) return toast("PINs do not match", "error");
 
-  const btn = el("btn-reset-verify");
-  btn.disabled = true; btn.innerText = "Verifying...";
+  const pinErr = validatePin(newPin);
+  if (pinErr)  return toast(pinErr, "error");
 
+  const phone = formatPhone(rawPhone);
+  if (!phone) return toast("Invalid phone number", "error");
+
+  const btn = el("btn-reset-submit");
+  btn.disabled = true; btn.innerText = "Resetting...";
   try {
-    const result  = await resetConfirmation.confirm(code);
-    const idToken = await result.user.getIdToken(); // ID token for backend
-    const phone   = formatPhone(rawPhone);
-
     const res  = await fetch(API + "/auth/reset-pin", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone, newPin, firebaseIdToken: idToken })
+      body: JSON.stringify({ phone, newPin })
     });
     const data = await res.json();
-
     if (!res.ok) { toast(data.message || "Reset failed", "error"); return; }
-
     toast("✅ PIN reset! Please sign in.", "success");
     closeModal("reset-modal");
     setTimeout(() => openModal("login-modal"), 300);
+  } catch { toast("Network error. Try again.", "error"); }
+  finally { btn.disabled = false; btn.innerText = "Reset PIN"; }
+}
 
-  } catch (err) {
-    console.error("Reset verify error:", err);
-    toast(firebaseErrMsg(err), "error");
-  } finally {
-    btn.disabled = false; btn.innerText = "Reset PIN";
+// ================================================================
+// PHONE MASKING — confirm field shows asterisks while typing
+// ================================================================
+function maskPhoneConfirm(input) {
+  // We store the real value in a data attribute,
+  // but display asterisks for the last N-3 chars
+  const val = input.value;
+  if (val.length > 3) {
+    const visible = val.slice(0, 3);
+    const masked  = "*".repeat(val.length - 3);
+    // We need the real value for comparison — store it
+    input.dataset.real = val;
+  } else {
+    input.dataset.real = val;
   }
-}
-
-function resetGoBack() {
-  el("reset-step-1").style.display = "block";
-  el("reset-step-2").style.display = "none";
-  el("reset-otp-code").value       = "";
-  resetConfirmation = null;
-  if (resetRecaptcha) { resetRecaptcha.clear(); initRecaptchas(); }
-}
-
-// ================================================================
-// FIREBASE ERROR MESSAGES — human readable
-// ================================================================
-function firebaseErrMsg(err) {
-  const code = err.code || "";
-  if (code === "auth/invalid-phone-number")     return "Invalid phone number format";
-  if (code === "auth/too-many-requests")        return "Too many attempts. Try again later.";
-  if (code === "auth/invalid-verification-code") return "Wrong code. Check your SMS and try again.";
-  if (code === "auth/code-expired")             return "Code expired. Request a new one.";
-  if (code === "auth/quota-exceeded")           return "SMS quota exceeded. Try again tomorrow.";
-  if (code === "auth/captcha-check-failed")     return "Security check failed. Refresh and try again.";
-  if (code === "auth/network-request-failed")   return "Network error. Check your connection.";
-  return err.message || "Something went wrong. Try again.";
 }
 
 // ================================================================
 // UTILS
 // ================================================================
-function formatPhone(raw) {
-  let p = raw.replace(/\s+/g, "").replace(/^0/, "254");
-  if (p.startsWith("+")) p = p.slice(1);
-  if (!/^254(7\d{8}|1\d{8})$/.test(p)) return null;
-  return p;
-}
-
 function logout() {
   token = null;
   localStorage.removeItem("av_token");
-  auth.signOut().catch(() => {});
   if (socket) socket.disconnect();
   if (pollTimer) clearInterval(pollTimer);
   location.reload();
@@ -884,7 +798,7 @@ function showToast(t, msg, type) {
   t.innerText   = msg;
   t.className   = type === "success" ? "success" : type === "error" ? "error" : "info";
   t.classList.add("show");
-  toastTimer = setTimeout(() => { t.classList.remove("show"); toastTimer = null; }, 3000);
+  toastTimer = setTimeout(() => { t.classList.remove("show"); toastTimer = null; }, 3500);
 }
 
 function openModal(id)         { const m = el(id); if (m) m.classList.add("open"); }
@@ -910,12 +824,9 @@ window.openWithdraw      = openWithdraw;
 window.doDeposit         = doDeposit;
 window.doWithdraw        = doWithdraw;
 window.doLogin           = doLogin;
-window.regSendOtp        = regSendOtp;
-window.regVerifyOtp      = regVerifyOtp;
-window.regGoBack         = regGoBack;
-window.resetSendOtp      = resetSendOtp;
-window.resetVerifyOtp    = resetVerifyOtp;
-window.resetGoBack       = resetGoBack;
+window.doRegister        = doRegister;
+window.doResetPin        = doResetPin;
 window.setAmount         = setAmount;
 window.setDepAmount      = setDepAmount;
 window.toggleAutoCashout = toggleAutoCashout;
+window.maskPhoneConfirm  = maskPhoneConfirm;
