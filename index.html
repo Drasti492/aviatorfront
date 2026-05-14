@@ -231,7 +231,7 @@
     <button class="modal-close" onclick="closeModal('deposit-modal')">×</button>
     <div class="modal-icon">💳</div>
     <div class="modal-title">Deposit</div>
-    <div class="modal-sub">Min KES 100 via M-Pesa STK Push</div>
+    <div class="modal-sub">Min KES 200 via M-Pesa STK Push</div>
     <div class="field">
       <label>M-Pesa Phone</label>
       <input type="tel" id="dep-phone" placeholder="0712345678" maxlength="12">
@@ -241,12 +241,12 @@
       <input type="number" id="dep-amount" placeholder="100" min="100">
     </div>
     <div class="quick-amounts" style="margin-bottom:14px">
-      <button onclick="setDepAmount(100)">100</button>
       <button onclick="setDepAmount(200)">200</button>
       <button onclick="setDepAmount(500)">500</button>
+      <button onclick="setDepAmount(800)">800</button>
       <button onclick="setDepAmount(1000)">1000</button>
     </div>
-    <button class="btn-full green" id="btn-dep-submit" onclick="doDeposit()">💚 Pay via M-Pesa</button>
+    <button class="btn-full green" id="btn-dep-submit" onclick="doDeposit()"> Pay via M-Pesa</button>
   </div>
 </div>
 

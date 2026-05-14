@@ -1,7 +1,3 @@
-// ====================================================
-// AVIATOR — Game Logic (No OTP / No Firebase)
-// Phone confirmed by double-entry on register only
-// ====================================================
 
 const API        = "https://aviator-9raf.onrender.com/api";
 const SOCKET_URL = "https://aviator-9raf.onrender.com";
@@ -26,9 +22,8 @@ let canvas, ctx;
 
 const el = (id) => document.getElementById(id);
 
-// ================================================================
+ 
 // INIT
-// ================================================================
 document.addEventListener("DOMContentLoaded", () => {
   generateStars();
   initCanvas();
@@ -42,9 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-// ================================================================
 // PHONE VALIDATION — mirrors server-side logic
-// ================================================================
 function formatPhone(raw) {
   let p = raw.replace(/\s+/g, "").replace(/^0/, "254");
   if (p.startsWith("+")) p = p.slice(1);
@@ -348,9 +341,7 @@ function connectSocket() {
   socket.on("error_msg", (msg) => toast("⚠️ " + msg, "error"));
 }
 
-// ================================================================
 // PLANE & MULTIPLIER
-// ================================================================
 function updateMultiplier(v) {
   el("mult-el").innerText = v.toFixed(2) + "x";
   if (v >= 5) el("mult-el").classList.add("danger");
@@ -377,9 +368,7 @@ function showCrash(p) {
 }
 function hideCrash() { el("crash-overlay").style.display = "none"; }
 
-// ================================================================
 // BUTTONS
-// ================================================================
 function renderButtons() {
   const bet  = el("btn-bet");
   const cash = el("btn-cash");
@@ -419,9 +408,7 @@ function renderButtons() {
   }
 }
 
-// ================================================================
 // GAME ACTIONS
-// ================================================================
 function startGame() {
   if (!token)                  return openModal("login-modal");
   if (gameState !== "WAITING") return toast("Wait for the next round!", "info");
@@ -449,9 +436,7 @@ function cashOut() {
 
 function setAmount(v) { el("bet-input").value = v; }
 
-// ================================================================
 // WALLET
-// ================================================================
 async function fetchWallet() {
   if (!token) return;
   try {
@@ -465,9 +450,8 @@ async function fetchWallet() {
   } catch (e) { console.error("Wallet:", e); }
 }
 
-// ================================================================
 // HISTORY
-// ================================================================
+
 async function fetchHistory() {
   if (!token) return;
   try {
@@ -497,9 +481,7 @@ function renderHistory(list) {
   });
 }
 
-// ================================================================
 // LEADERBOARD
-// ================================================================
 async function fetchLeaderboard() {
   try {
     const res  = await fetch(API + "/stats/leaderboard");
@@ -533,7 +515,7 @@ async function doDeposit() {
   const rawPhone = el("dep-phone").value.trim();
   const amount   = Number(el("dep-amount").value);
   if (!rawPhone)               return toast("Enter your M-Pesa phone number", "error");
-  if (!amount || amount < 100) return toast("Minimum deposit is KES 100", "error");
+  if (!amount || amount < 200) return toast("Minimum deposit is KES 200", "error");
   const phone = formatPhone(rawPhone);
   if (!phone) return toast("Invalid phone number format", "error");
 
@@ -581,7 +563,7 @@ function startStkPoll(reference) {
       } else if (data.status === "failed") {
         clearInterval(pollTimer);
         el("stk-status").className = "status-pill failed";
-        el("stk-status").innerText = "❌ Payment failed or cancelled";
+        el("stk-status").innerText = " Payment failed or cancelled";
         toast("Deposit failed. Try again.", "error");
       } else if (attempts >= 18) {
         clearInterval(pollTimer);
@@ -599,13 +581,13 @@ function openWithdraw() {
   const saved = localStorage.getItem("av_phone");
   if (saved && el("wth-phone")) el("wth-phone").value = saved;
   const realMoney   = Math.max(0, walletBalance - bonusBalance);
-  const minWithdraw = realMoney > 0 ? 200 : 400;
+  const minWithdraw = realMoney > 0 ? 500 : 800;
   el("wi-balance").innerText = "KES " + walletBalance.toLocaleString();
   el("wi-bonus").innerText   = "KES " + bonusBalance.toLocaleString();
   el("wi-min").innerText     = "KES " + minWithdraw;
   el("wth-warning").innerText = realMoney > 0
-    ? "⚠️ Min withdrawal is KES 200 (you have real deposited money)."
-    : "⚠️ Min withdrawal is KES 400 when using bonus balance only.";
+    ? "⚠️ Min withdrawal is KES 500 (you have real deposited money)."
+    : "⚠️ Min withdrawal is KES 800 when using bonus balance only.";
   el("wth-amount").dataset.min = minWithdraw;
   openModal("withdraw-modal");
 }
